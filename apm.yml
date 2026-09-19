@@ -1,0 +1,15 @@
+name: 0g-agent-experiment
+version: 1.0.0
+description: APM project for 0g-agent-experiment
+author: Sandoche
+# Which agent platforms to deploy to.
+# Resolution order: --target flag > this field > auto-detect from filesystem.
+# Accepted values: agent-skills, antigravity, claude, codex, copilot, cursor, gemini, grok-build, hermes, kiro, opencode, vscode, windsurf
+targets:
+  - codex
+dependencies:
+  apm:
+    - obra/superpowers#v6.4.1
+  mcp: []
+includes: auto
+scripts: {}
