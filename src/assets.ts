@@ -22,7 +22,7 @@ export const assets: readonly Asset[] = Object.freeze([
     'https://developers.circle.com/stablecoins/usdc-contract-addresses'),
   asset('USDC', 42161, '0xaf88d065e77c8cc2239327c5edb3a432268e5831', 6, 'cash',
     'https://developers.circle.com/stablecoins/usdc-contract-addresses'),
-  asset('USDG', 4663, '0x5fc5360d0400a0fd4f2af552add042d716f1d168', 18, 'cash',
+  asset('USDG', 4663, '0x5fc5360d0400a0fd4f2af552add042d716f1d168', 6, 'cash',
     'https://docs.robinhood.com/chain/contracts/'),
   asset('USDT', 56, '0x55d398326f99059ff775485246999027b3197955', 18, 'cash',
     'https://www.binance.com/en/proof-of-collateral'),

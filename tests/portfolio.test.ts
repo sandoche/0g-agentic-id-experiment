@@ -17,10 +17,10 @@ test('moves funding cash to the largest chain deficit', () => {
   expect(nextAction(strategy, snapshot(0n, 0n, 0n, 0n, 1000n))).toEqual({ kind: 'transfer', from: usdBase, to: usdR, amount: 600000000n });
 });
 test('uses existing destination cash without a bridge', () => {
-  expect(nextAction(strategy, snapshot(0n, 400n, 600n))).toEqual({ kind: 'swap', from: usdR, to: tao, amount: 600n * 10n ** 18n });
+  expect(nextAction(strategy, snapshot(0n, 400n, 600n))).toEqual({ kind: 'swap', from: usdR, to: tao, amount: 600000000n });
 });
 test('keeps cash required for the source chain positions', () => {
-  expect(nextAction(strategy, snapshot(0n, 0n, 1000n))).toEqual({ kind: 'transfer', from: usdR, to: usdB, amount: 400n * 10n ** 18n });
+  expect(nextAction(strategy, snapshot(0n, 0n, 1000n))).toEqual({ kind: 'transfer', from: usdR, to: usdB, amount: 400000000n });
 });
 test('counts deposits in global target value', () => {
   expect(nextAction(strategy, snapshot(600n, 400n, 0n, 0n, 100n))).toEqual({ kind: 'transfer', from: usdBase, to: usdR, amount: 60000000n });
@@ -56,4 +56,7 @@ test.each(['incomplete', 'missing', 'stale', 'future', 'negative', 'zero-price',
 });
 test('uses BNB cash to buy its configured position', () => {
   expect(nextAction(strategy, snapshot(600n, 0n, 0n, 400n))).toEqual({ kind: 'swap', from: usdB, to: zero, amount: 400n * 10n ** 18n });
+});
+test('values actual six-decimal Robinhood USDG units correctly', () => {
+  expect(holdingValue({ asset: usdR, units: 1000000n, priceUsd: 100000000n, observedAt: 0 })).toBe(100000000n);
 });
