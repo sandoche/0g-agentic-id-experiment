@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { encodeFunctionData, keccak256, parseAbi } from 'viem';
-import { validateSwap, ROUTER, createSwap } from '../src/swap.js';
+import { validateSwap, ROUTER, createSwap, createSwapApi } from '../src/swap.js';
 import { createTransactionRunner } from '../src/transaction.js';
 import { config, tao, usdR } from './fixtures.js';
 import type { Journal, Store } from '../src/state.js';
@@ -12,6 +12,13 @@ const desc = { srcToken: usdR.address, dstToken: tao.address, srcReceiver: other
 function response(changes = {}) { return { tx: { from: wallet, to: ROUTER, value: '0', data: encodeFunctionData({ abi, functionName: 'swap', args: [other, { ...desc, ...changes }, '0x'] }) }, dstAmount: '1000' }; }
 it('accepts a constrained generic ERC20 swap', () => {
   expect(validateSwap(action, wallet, 4663, ROUTER, response(), 1000n, 50n).to).toBe(ROUTER);
+});
+it('can obtain preview calldata before approval while local signing still estimates execution', async () => {
+  const fetcher = vi.fn(async (url: URL | RequestInfo) => {
+    expect(new URL(String(url)).searchParams.get('disableEstimate')).toBe('true');
+    return Response.json(response());
+  });
+  await createSwapApi({ ...config, credentials: { oneinch: 'synthetic' } }, wallet, fetcher).swap(action);
 });
 describe('rejects unsafe calldata before any signer is called', () => {
   it.each([{ dstReceiver: other }, { srcToken: tao.address }, { dstToken: usdR.address }, { amount: 1n }, { minReturnAmount: 994n }, { flags: 1n }, { flags: 2n }, { flags: 4n }])('rejects mutation %#', change => {

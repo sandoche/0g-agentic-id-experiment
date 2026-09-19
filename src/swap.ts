@@ -48,7 +48,7 @@ export function createSwapApi(config: Config, wallet: Address, fetcher: typeof f
     async quote(a) { const r = await request<{ dstAmount: string }>(a.from.chainId, 'quote', params(a));
       if (!/^\d+$/.test(r.dstAmount)) throw new Error('INVALID_QUOTE'); return BigInt(r.dstAmount); },
     swap(a) { return request(a.from.chainId, 'swap', { ...params(a), from: wallet, origin: wallet, receiver: wallet,
-      slippage: (Number(config.strategy.slippageBps) / 100).toString(), allowPartialFill: 'false', usePermit2: 'false', disableEstimate: 'false' }); },
+      slippage: (Number(config.strategy.slippageBps) / 100).toString(), allowPartialFill: 'false', usePermit2: 'false', disableEstimate: 'true' }); },
     async spender(chain) { return (await request<{ address: string }>(chain, 'approve/spender')).address; },
   };
 }

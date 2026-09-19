@@ -3,7 +3,7 @@ import { assets } from './assets.js';
 import { chainDefinition, createRpc } from './rpc.js';
 import { ROUTER, routerCode, swapAbi, type SwapPort } from './swap.js';
 import { requireTradingChain } from './config.js';
-import { createTransactionRunner, type TransactionPort } from './transaction.js';
+import { createTransactionRunner, type TransactionPort, type Call } from './transaction.js';
 import type { Store } from './state.js';
 import type { Asset, Config, TradingChain } from './types.js';
 type Gate = { native(): Promise<bigint>; nonces(): Promise<[number, number]>; owner(): Promise<void>; balance(): Promise<bigint> };
@@ -17,7 +17,7 @@ export async function signingGate<T>(request: { gas?: bigint; gasPrice?: bigint;
   await io.owner();
   return sign();
 }
-export function createChain(config: Config, account: LocalAccount, store: Store, guard: () => Promise<void>, event?: Parameters<typeof createTransactionRunner>[2]) {
+export function createChain(config: Config, account: LocalAccount, store: Store, guard: () => Promise<void>, event?: Parameters<typeof createTransactionRunner>[2], recoveryAllowed?: (call: Call) => Promise<boolean>) {
   const rpc = (chain: TradingChain) => createRpc(config, requireTradingChain(chain));
   const balance = (asset: Asset) => rpc(asset.chainId).readContract({ address: asset.address, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] });
   const transport: TransactionPort = {
@@ -26,7 +26,9 @@ export function createChain(config: Config, account: LocalAccount, store: Store,
       if (await client.getChainId() !== call.chainId) throw new Error('RPC_CHAIN_MISMATCH');
       // The signing boundary independently identifies the exact token debit for a fresh balance check.
       let source: Asset | undefined, spend = 0n;
-      if (call.to.toLowerCase() === ROUTER) {
+      const recovery = await recoveryAllowed?.(call) ?? false;
+      if (recovery) { /* The escrow layer validated this exact bounded recovery call. */ }
+      else if (call.to.toLowerCase() === ROUTER) {
         const decoded = decodeFunctionData({ abi: swapAbi, data: call.data });
         source = assets.find(a => a.chainId === call.chainId && a.address === decoded.args[1].srcToken.toLowerCase()); spend = decoded.args[1].amount;
       } else {
@@ -34,13 +36,13 @@ export function createChain(config: Config, account: LocalAccount, store: Store,
         if (approval.functionName !== 'approve' || approval.args[0].toLowerCase() !== ROUTER) throw new Error('UNSAFE_TRANSACTION');
         source = assets.find(a => a.chainId === call.chainId && a.address === call.to.toLowerCase()); spend = approval.args[1];
       }
-      if (!source || call.value !== 0n) throw new Error('UNSAFE_TRANSACTION');
+      if ((!source && !recovery) || call.value !== 0n) throw new Error('UNSAFE_TRANSACTION');
       const wallet = createWalletClient({ account, chain: chainDefinition(call.chainId, config.rpcUrls[call.chainId]), transport: http(config.rpcUrls[call.chainId], { retryCount: 0, timeout: 10000 }) });
       const request = await wallet.prepareTransactionRequest({ to: call.to, data: call.data, value: call.value });
       return signingGate(request, {
         native: () => client.getBalance({ address: account.address }),
         nonces: async () => [await client.getTransactionCount({ address: account.address, blockTag: 'latest' }), await client.getTransactionCount({ address: account.address, blockTag: 'pending' })],
-        balance: () => balance(source!), owner: guard,
+        balance: () => source ? balance(source) : Promise.resolve(0n), owner: guard,
       }, spend, () => wallet.signTransaction(request));
     },
     async broadcast(chain, raw) {
