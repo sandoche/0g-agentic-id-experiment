@@ -73,12 +73,33 @@ attestation infrastructure. Neither is necessary for this experiment.
 ## Deployment and secret handling
 
 Use `@0gfoundation/0g-agenticid-sdk` with `AgenticID.fromAttestor()` and
-`framework: openclaw`. Read model choices from the attestor/model catalog.
+`framework: openclaw`. The default model is `glm-5.3`, verified in the public
+0G router catalog as TeeML with TDX/dstack attestation. Enclave-hosted model
+inference is mandatory: use the `private` trust tier on every request, with no
+TeeTLS or Standard fallback. Selecting a TeeML-capable model alone is insufficient.
+Check the live catalog again before deploying and use the sealed provider's
+32768-token output limit, not the aggregate catalog's larger routing limit.
+
+Enforce the header `X-0G-Provider-Trust-Mode: private` in the encrypted
+`openclaw.json` provider configuration before the first inference, not as a
+later bootstrap action. Use OpenClaw's `openai` wire-format provider pinned to
+`https://router-api.0g.ai/v1`, with its key resolved from the sealed environment.
+This still calls 0G inference; the name describes the API dialect. The sealed
+adapter's `0g-compute` convenience augmentation replaces provider configuration
+and can discard custom headers, so do not rely on that alias for this requirement.
+Set the API key's Trust Mode to Private in the 0G dashboard as a second layer.
+Tests must capture the initial request, assert the header and fixed endpoint,
+and verify that unavailable private providers cause failure without a weaker retry.
+
+The assistant must not inspect or display the user's private keys. Do not read
+the entire local `.env` for debugging. Application code may load the owner's
+key privately when an explicitly selected wallet command requires it; tests
+use synthetic keys, and read-only market checks do not load the owner key.
 Use a stable locally persisted deployment idempotency key and save the seal ID
 as soon as accepted; resume polling or retry the existing deployment after a
 timeout rather than minting again.
 
-Mint explicit `framework` and `persona` iData. The encrypted persona carries
+Mint explicit `framework`, `openclaw.json`, and `persona` iData. The encrypted persona carries
 the private strategy and a self-contained bootstrap payload for the worker.
 OpenClaw extracts that payload locally into a skill subdirectory and starts the
 Node worker; it does not reproduce secret bytes in chat. Keep the reusable
@@ -106,8 +127,10 @@ The agent wallet signs through the SDK's `sealAccount()` adapter and
 cycle and before submitting a trade; pause if the owner changed.
 
 Encryption protects stored agent data; it is not a guarantee that an LLM cannot
-disclose its prompt. Model providers may receive agent context, and public
-trades can reveal portfolio composition. Explain these limits accurately.
+disclose its prompt. Private routing requires enclave model execution, but do
+not claim independently verified end-to-end encryption merely from a catalog
+flag or the router's zero-retention policy. Public trades can reveal portfolio
+composition. Explain these limits accurately.
 
 ## Rebalancing and 1inch
 
@@ -227,6 +250,9 @@ RPC URL from an API key. Never claim all Fusion+ flows are gasless: current
 - [Binance 0G token listing and BNB contract](https://www.binance.com/en/support/announcement/detail/e7b441acff484d25a1120f8ae7ce6e54)
 - [Circle native USDC addresses](https://developers.circle.com/stablecoins/usdc-contract-addresses)
 - [Binance pegged-token collateral](https://www.binance.com/en/proof-of-collateral)
+- [0G private routing enforcement](https://docs.0g.ai/developer-hub/building-on-0g/compute-network/router/privacy)
+- [0G GLM-5.3 sealed provider](https://0g.ai/blog/glm-5-3-teeml)
+- [Public 0G model catalog](https://router-api.0g.ai/v1/models)
 
 ## Token verification snapshot (2026-09-19)
 
