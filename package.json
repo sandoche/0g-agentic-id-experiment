@@ -1,0 +1,26 @@
+{
+  "name": "agentic-portfolio-experiment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "tsx scripts/build.ts",
+    "agent": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-agenticid-sdk": "0.1.6",
+    "@1inch/cross-chain-sdk": "2.2.4",
+    "dotenv": "^17.3.1",
+    "viem": "^2.47.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
