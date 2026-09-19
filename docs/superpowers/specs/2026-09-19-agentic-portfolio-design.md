@@ -1,6 +1,7 @@
-# Agentic portfolio experiment — proposed design
+# Agentic portfolio experiment — design
 
-Status: proposed for user review. Implementation has not started.
+Status: design approved on 2026-09-19, with subsequent user-directed portfolio
+and network amendments incorporated below. Implementation planning is in progress.
 
 ## Intended result
 
@@ -10,9 +11,11 @@ invests the agent wallet's funded balance using 1inch and checks the portfolio
 every five minutes. The strategy and executable capability travel with the
 encrypted INFT, including after supported reset, transfer, and clone operations.
 
-The exact seven assets and percentage weights come from the user's private
-objective. They must not be copied into public documentation, fixtures, logs,
-or source control. There is no fixed dollar budget. Store the real prompt and
+The stock exposures come from the user's private objective. The user subsequently
+added TAO and 0G, removed VIRTUAL and RENDER, and delegated revised weights to the
+implementer for this proof of concept. Keep FET now that its official BNB deployment
+has been verified. Actual weights and the real prompt must not be copied into
+public documentation, fixtures, logs, or source control. There is no fixed dollar budget. Store the real prompt and
 allocations in ignored `.env` variables; `.env.example` contains only sample
 values and a sample prompt. Use synthetic allocations in tests.
 
@@ -24,28 +27,35 @@ as tested until credentials and funds are supplied.
 
 ## Network choices
 
-The user explicitly selected Robinhood Chain for stock tokens and allowed the
-implementation to select the easiest initial funding chain.
+The user explicitly selected Robinhood Chain for stock tokens and TAO, BNB Smart
+Chain for 0G, and also accepts Base and Arbitrum. The portfolio spans Robinhood
+and BNB; Base is the default funding network, with Arbitrum available as an option.
 
 - Identity, minting, sandbox deposits, and evolution gas: the chain advertised
   by the AgenticID attestor, currently 0G Galileo testnet (16602).
-- Initial investment balance: native USDC on Base (8453).
+- Initial investment balance: native USDC on Base (8453), or Arbitrum One (42161)
+  when selected in configuration. Do not require users to fund both.
 - Five stock exposures: canonical Robinhood stock tokens on Robinhood Chain
   (4663), with addresses verified against Robinhood's official asset registry.
-- VIRTUAL: official Robinhood token, verified against issuer documentation and
-  the live chain. FET is omitted: no official Base/Robinhood deployment was
-  verified, and the user authorizes omitting unavailable crypto positions.
-- Portfolio settlement cash: USDG on Robinhood. Convert incoming Base USDC to
-  Robinhood USDG through 1inch before investing; rebalance locally on Robinhood.
+- TAO: ForeverMoney's bridged TAO on Robinhood, verified against its published
+  SDK deployment metadata and live chain. Describe the bridge representation accurately.
+- 0G and FET: verified token deployments on BNB Smart Chain (56). The investment
+  token 0G on BNB is separate from the 0G testnet gas used for AgenticID.
+- VIRTUAL and RENDER: removed at the user's request. Do not search for substitutes.
+- Portfolio settlement cash: USDG on Robinhood and Binance-Peg USDT on BNB.
+  Value all configured holdings and settlement balances together. Move only the
+  required cash between allowed chains through 1inch Fusion+, then use same-chain
+  swaps to rebalance each chain's positions. Fresh settled balances are required
+  before further spending; do not count a pending bridge twice.
 - Ethereum mainnet is explicitly forbidden. Do not use it for trading, funding,
-  bridging, or fallback routes. Trading networks are limited to Base and Robinhood.
+  bridging, or fallback routes. Trading networks are limited to Base, Arbitrum,
+  Robinhood, and BNB. No Ethereum-mainnet RPC, approval, signature, or bridge hop.
 
 Resolve crypto token addresses from issuer
 sources and require matching chain, deployed bytecode, and decimals before
-enabling a route. Omit FET during initial strategy preparation and proportionally
-normalize the remaining requested weights to 100%; report this adjustment
-explicitly. Never
-substitute another asset. Once minted, a temporarily unavailable route must
+enabling a route. Assign simple proof-of-concept weights totaling 100% in the
+private `.env`, as authorized by the user; keep distinct sample weights in
+`.env.example`. Never substitute another asset. Once minted, a temporarily unavailable route must
 skip the trade without changing that frozen strategy. Missing stock tokens
 remain an error. Live route availability requires the user's 1inch API key.
 
@@ -102,16 +112,16 @@ trades can reveal portfolio composition. Explain these limits accurately.
 ## Rebalancing and 1inch
 
 Use integer token units and fixed-point USD values, never floating-point token
-amounts. Read current balances and prices on the portfolio chain. Settle incoming
-Base USDC into Robinhood USDG first. Include USDG as unallocated investment cash;
-exclude native gas reserves from investable
-value. Preserve the sealed target percentages, including any explicitly reported
-proportional normalization after an authorized initial crypto omission.
+amounts. Read current balances and prices across the configured chains. Include
+USDC, USDG, and Binance-Peg USDT as unallocated investment cash at their actual
+USD prices; exclude native gas reserves from investable value. Preserve the
+sealed target percentages across the entire portfolio, not separately per chain.
 
 Each five-minute tick refreshes holdings, identifies overweight assets, sells
-them into Robinhood USDG, then buys deficits from settled USDG. Use the 1inch
+them into the local settlement token, transfers cash only where needed, then
+buys deficits from settled cash. Recompute after each confirmed execution. Use the 1inch
 Classic Swap API for same-chain swaps and the official Cross-Chain SDK for
-cross-chain funding orders from Base. Receiver is always the agent's own address. A cycle cannot
+cash transfers between the configured allowed chains. Receiver is always the agent's own address. A cycle cannot
 overlap another, and unresolved orders prevent duplicate spending.
 
 Use configurable slippage, a minimum trade value, and a drift threshold. The
@@ -166,8 +176,10 @@ The README distinguishes:
 2. Prepaid sandbox balance via `ag.deposit()` (currently minimum 0.1 OG at deploy).
 3. Agent 0G gas via `topUpAgentSeal()` for encrypted state updates.
 4. Inference credit and API key from 0G Private Computer.
-5. Investment USDC deposited to the agent address on Base.
-6. Native ETH on trading chains for approvals or any non-gasless execution.
+5. Investment USDC deposited to the agent address on the selected funding chain
+   (Base by default, or Arbitrum), with direct settlement-token funding also supported.
+6. Native ETH on Base/Arbitrum/Robinhood and native BNB on BNB for approvals or
+   any non-gasless execution. ETH gas on an L2 does not use Ethereum mainnet.
 
 Document direct funding, exchange withdrawal to the correct chain/address, and
 manual swap/bridge funding options. Do not imply 0G testnet tokens buy mainnet
@@ -191,7 +203,7 @@ RPC URL from an API key. Never claim all Fusion+ flows are gasless: current
 - Verify `.env`, logs, and credentials are excluded from Git, and `.env.example`
   contains only example allocations and an example prompt.
 - Record which checks are offline, read-only live probes, and credential-dependent.
-- Commit and push reviewed implementation changes, preserving the prior user instruction.
+- Commit and push after each verified milestone, as requested by the user.
 
 ## Sources inspected
 
@@ -211,3 +223,23 @@ RPC URL from an API key. Never claim all Fusion+ flows are gasless: current
 - [Robinhood live stock metadata](https://api.robinhood.com/rhj/assets)
 - [VIRTUAL official contract addresses](https://whitepaper.virtuals.io/info-hub/important-links-and-resources/virtuals-protocol-contract-addresses)
 - [FET official supported networks](https://superintelligence.io/asi-token-fet/)
+- [ForeverMoney TAO deployment metadata](https://github.com/ForeverMoney-Ai/forevermoney-sdk/blob/main/src/chains/deployment.ts)
+- [Binance 0G token listing and BNB contract](https://www.binance.com/en/support/announcement/detail/e7b441acff484d25a1120f8ae7ce6e54)
+- [Circle native USDC addresses](https://developers.circle.com/stablecoins/usdc-contract-addresses)
+- [Binance pegged-token collateral](https://www.binance.com/en/proof-of-collateral)
+
+## Token verification snapshot (2026-09-19)
+
+Read-only RPC checks confirmed chain IDs, deployed bytecode, symbols, and 18
+decimals for TAO, 0G, and FET at the addresses below. These checks establish
+deployment identity, not live 1inch liquidity; authenticated quote checks remain
+part of preflight after the user provides an API key.
+
+| Asset | Chain | Contract | Primary address source |
+| --- | --- | --- | --- |
+| TAO | Robinhood (4663) | `0xf3081494b87e8d5fb7960f066e931d1d0e6e3d67` | ForeverMoney SDK |
+| 0G | BNB (56) | `0x4b948d64de1f71fcd12fb586f4c776421a35b3ee` | Binance listing announcement |
+| FET | BNB (56) | `0x031b41e504677879370e9dbcf937283a8691fa7f` | ASI Alliance token page |
+
+Arbitrum is an allowed funding chain, not a reason to invent a token deployment.
+No VIRTUAL deployment on Arbitrum was verified before that asset was removed.
