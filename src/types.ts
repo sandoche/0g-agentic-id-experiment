@@ -14,3 +14,9 @@ export type Config = {
   rpcUrls: Record<TradingChain, string>; attestorUrl: string; model: string;
   credentials: { oneinch?: string; inference?: string; ownerKey?: Address };
 };
+export type Holding = { asset: Asset; units: bigint; priceUsd: bigint; observedAt: number };
+export type Snapshot = { holdings: Holding[]; now: number; complete: boolean };
+export type Action =
+  | { kind: 'swap'; from: Asset; to: Asset; amount: bigint }
+  | { kind: 'transfer'; from: Asset; to: Asset; amount: bigint }
+  | { kind: 'idle'; reason: string };
