@@ -2,6 +2,13 @@
 $ErrorActionPreference = 'Stop'
 Push-Location (Split-Path $PSScriptRoot -Parent)
 try {
+    $memoryCommand = Get-Command codebase-memory-mcp -ErrorAction SilentlyContinue
+    if (-not $memoryCommand) {
+        throw 'Install the Codebase Memory native runtime and reopen the terminal: https://deusdata.github.io/codebase-memory-mcp/'
+    }
+    & $memoryCommand.Source --version
+    if ($LASTEXITCODE -ne 0) { throw 'Codebase Memory runtime verification failed.' }
+
     $apmCommand = Get-Command apm -ErrorAction SilentlyContinue
     if ($apmCommand) {
         $apmExecutable = $apmCommand.Source
@@ -37,7 +44,7 @@ try {
     $bootstrapDirectory = '.codex/hooks/superpowers/skills/using-superpowers'
     New-Item -ItemType Directory -Force -Path $bootstrapDirectory | Out-Null
     Copy-Item -LiteralPath '.agents/skills/using-superpowers/SKILL.md' -Destination "$bootstrapDirectory/SKILL.md" -Force
-    Write-Host 'Agent setup complete: pinned Superpowers skills and startup bootstrap installed.'
+    Write-Host 'Agent setup complete: Superpowers, Caveman, and Codebase Memory MCP configured through APM.'
 } finally {
     Pop-Location
 }

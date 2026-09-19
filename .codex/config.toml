@@ -1,0 +1,6 @@
+[mcp_servers.codebase-memory-mcp]
+command = "codebase-memory-mcp"
+args = []
+id = ""
+
+[mcp_servers.codebase-memory-mcp.env]

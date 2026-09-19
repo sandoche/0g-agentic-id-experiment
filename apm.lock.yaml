@@ -1,6 +1,24 @@
 lockfile_version: '1'
 apm_version: 0.31.0
 dependencies:
+- repo_url: juliusbrussee/caveman
+  materialization_repo_url: JuliusBrussee/caveman
+  name: caveman
+  host: github.com
+  resolved_commit: 8b0c1d3699b8d83e87fe4605b378da20c41555e0
+  resolved_ref: v2.7.0
+  version: unknown
+  virtual_path: skills/caveman
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/caveman
+  - .agents/skills/caveman/README.md
+  - .agents/skills/caveman/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/caveman/README.md: sha256:e86f4b56765fc288859a8a1f3e3814c990ba920b326c40c55667b56d44c58c1e
+    .agents/skills/caveman/SKILL.md: sha256:0bf09a0a9a017d004a81d4b693e5a2d830e1a28230a5885df773e1ed9c0571cc
+  content_hash: sha256:43ab924e4422a09c24d16dc81349771513bc801c1be21077c252952fe753e6b6
 - repo_url: obra/superpowers
   name: superpowers
   host: github.com
@@ -263,6 +281,33 @@ deployments:
   - obra/superpowers
   active_owner: obra/superpowers
   content_hash: sha256:6ffcb038b53254bd31debaa15e12dcd4ff24bd63d690e0b644ac6396701cf2e2
+- kind: project-relative
+  target: codex
+  value: .agents/skills/caveman
+  runtime: null
+  scope: project
+  owners:
+  - juliusbrussee/caveman/skills/caveman
+  active_owner: juliusbrussee/caveman/skills/caveman
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/caveman/README.md
+  runtime: null
+  scope: project
+  owners:
+  - juliusbrussee/caveman/skills/caveman
+  active_owner: juliusbrussee/caveman/skills/caveman
+  content_hash: sha256:e86f4b56765fc288859a8a1f3e3814c990ba920b326c40c55667b56d44c58c1e
+- kind: project-relative
+  target: codex
+  value: .agents/skills/caveman/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - juliusbrussee/caveman/skills/caveman
+  active_owner: juliusbrussee/caveman/skills/caveman
+  content_hash: sha256:0bf09a0a9a017d004a81d4b693e5a2d830e1a28230a5885df773e1ed9c0571cc
 - kind: project-relative
   target: codex
   value: .agents/skills/diagnosing-superpowers
@@ -1010,3 +1055,23 @@ deployments:
   - obra/superpowers
   active_owner: obra/superpowers
   content_hash: sha256:5e92229e49d7cff5e0355ab84b0bceb0d27d53c565b33210132ce6e413ee9665
+- kind: uri
+  target: mcp
+  value: codebase-memory-mcp
+  runtime: codex
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+mcp_servers:
+- codebase-memory-mcp
+mcp_configs:
+  codebase-memory-mcp:
+    name: codebase-memory-mcp
+    transport: stdio
+    registry: false
+    command: codebase-memory-mcp
+mcp_target_servers:
+  codex:
+  - codebase-memory-mcp
