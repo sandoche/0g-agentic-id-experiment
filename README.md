@@ -76,10 +76,32 @@ an existing environment file without copying or modifying it.
 
 ## 🪪 Mint and activate
 
-The current default attestor uses **0G testnet, chain 16602**. Inference credit,
-sandbox credit, owner gas, and the agent's evolution gas are separate balances.
-Use the [0G testnet faucet](https://faucet.0g.ai/) for the owner wallet's testnet OG.
-The CLI refuses protocol writes on an unexpected chain, including Ethereum mainnet.
+AgenticID defaults to **0G mainnet, chain 16661**. Select its environment with
+`AGENTIC_ATTESTOR_URL` in `.env`:
+
+| AgenticID network | `AGENTIC_ATTESTOR_URL` | Protocol funding |
+| --- | --- | --- |
+| Mainnet, 16661 (default) | `https://agenticid-mainnet.0g.ai` | Real native OG on 0G mainnet |
+| Testnet, 16602 | `https://agenticid.0g.ai` | Testnet OG from the [faucet](https://faucet.0g.ai/) |
+
+The SDK reads the chain, RPC and contract addresses from the selected attestor's
+`/config`; no separate 0G RPC setting is needed. Existing `.env` files with the
+testnet URL remain on testnet. Changing the URL does not migrate an existing INFT
+or its balances. Keep using its original endpoint to manage it. To deploy on the
+other network, use a separate checkout with its own `.env` and `.local` deployment
+state; agent IDs belong to their network.
+
+For mainnet, fund the owner wallet with native OG on **0G mainnet (16661)** using
+a withdrawal or transfer that supports that exact network. Faucet OG cannot fund
+mainnet. Inference credit, sandbox credit, owner gas, and the agent's evolution
+gas are separate balances. `topup-sandbox` deposits owner OG as sandbox credit;
+`topup-agent` transfers owner OG to the agent for evolution gas.
+
+**Mainnet deployment and top-ups spend real OG even while investment trading is
+in simulation mode.** Offline `simulate` remains free of network requests and
+signatures. Selecting 0G testnet does not switch the investment networks to
+testnets; investment execution still requires `activate --live`. The CLI permits
+only the two 0G protocol chains above and rejects Ethereum mainnet.
 
 ```powershell
 npm run agent -- preflight
@@ -130,8 +152,9 @@ Ethereum mainnet fallback. ETH used for L2 gas does not require an Ethereum-main
 transaction.
 
 Positions are NVDA, MSFT, GOOGL, AMZN, AVGO and TAO on Robinhood, plus 0G and FET on
-BNB. VIRTUAL and RENDER are omitted. Investment **0G on BNB** is distinct from
-testnet OG used for the INFT. Target weights are global across chains.
+BNB. VIRTUAL and RENDER are omitted. Investment **0G on BNB** is a separate
+network balance from native OG used for the INFT on the selected 0G network.
+Target weights are global across chains.
 
 After funding and reviewing the experiment:
 
