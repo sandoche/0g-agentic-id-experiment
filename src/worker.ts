@@ -17,6 +17,9 @@ export function validateConfiguration(value: unknown): Configuration {
 export function createWorker(config: Config, market: Market, execution: Execution, store: Store, readOwner: () => Promise<Address>, logger: (event: Event) => Promise<unknown>) {
   let active = false, busy = false, state = 'awaiting_configuration', lastCycleId: string | undefined, pendingId: string | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
+  let generation = 0;
+  const drained: (() => void)[] = [];
+  const finish = () => { busy = false; for (const resolve of drained.splice(0)) resolve(); };
   const events: Event[] = [];
   async function emit(event: Event) {
     const j = await store.load(); event.sequence = ++j.sequence; await store.save(j);
@@ -37,14 +40,16 @@ export function createWorker(config: Config, market: Market, execution: Executio
     events: (after: number) => events.filter(e => (e.sequence ?? 0) > after).slice(0, 100),
     async configure(input: Configuration, owner: Address) {
       const c = validateConfiguration(input);
-      if (busy) throw new Error('WORKER_BUSY'); busy = true;
+      if (busy) throw new Error('WORKER_BUSY'); busy = true; const started = generation;
       try {
         if ((await readOwner()).toLowerCase() !== owner.toLowerCase()) throw new Error('OWNER_CHANGED');
         await market.preflight();
+        if (started !== generation) throw new Error('NOT_CONFIGURED');
         const j = await store.load(); j.owner = owner; await store.save(j);
+        if (started !== generation) throw new Error('NOT_CONFIGURED');
         config.credentials = { oneinch: c.oneinch }; config.mode = c.mode; active = true; state = 'ready';
         await emit({ type: 'configured', time: Date.now() });
-      } finally { busy = false; }
+      } finally { finish(); }
     },
     async tick() {
       if (busy || !active) return; busy = true; lastCycleId = randomUUID();
@@ -53,6 +58,7 @@ export function createWorker(config: Config, market: Market, execution: Executio
         const initial = await store.load(); pendingId = initial.pending?.id;
         await emit({ type: 'cycle', time: Date.now(), cycleId: lastCycleId });
         if (initial.pending) {
+          if (config.mode !== 'live') { state = 'pending'; return; }
           const result = await execution.reconcile(); state = result === 'pending' ? 'pending' : 'ready';
           pendingId = (await store.load()).pending?.id; return;
         }
@@ -81,10 +87,11 @@ export function createWorker(config: Config, market: Market, execution: Executio
         const code = e instanceof Error && ['OWNER_CHANGED', 'OWNER_UNAVAILABLE', 'NOT_CONFIGURED', 'TX_REVERTED', 'INSUFFICIENT_GAS', 'UNSUPPORTED_CALLDATA'].includes(e.message) ? e.message : 'EXECUTION_FAILED';
         if (active) state = 'paused';
         await emit({ type: 'error', time: Date.now(), cycleId: lastCycleId, code });
-      } finally { busy = false; }
+      } finally { finish(); }
     },
     start() { if (!timer) timer = setInterval(() => { void worker.tick().catch(() => { state = 'paused'; active = false; }); }, 300000); },
-    async stop() { active = false; state = 'stopped'; config.credentials = {}; if (timer) clearInterval(timer); timer = undefined; },
+    async stop() { generation++; active = false; state = 'stopped'; config.credentials = {}; if (timer) clearInterval(timer); timer = undefined; },
+    async drain() { if (busy) await new Promise<void>(resolve => drained.push(resolve)); },
   };
   return worker;
 }

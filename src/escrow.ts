@@ -52,9 +52,20 @@ export function createEscrowVerifier(config: Config, rpc: (chain: TradingChain) 
     }
     return found;
   }
-  async function terminal(chain: TradingChain, address: Address, from: bigint, cancelled: boolean) {
+  async function terminal(p: FusionRecord, chain: TradingChain, address: Address, from: bigint, cancelled: boolean) {
     const c = await client(chain), head = await c.getBlockNumber();
-    return (await logs(chain, address, from, head - 1n)).some(l => l.topics[0] === (cancelled ? EscrowCancelledEvent.TOPIC : EscrowWithdrawalEvent.TOPIC));
+    p.terminalScans ??= {};
+    const scan = p.terminalScans[`${chain}:${address.toLowerCase()}`] ??= { cursor: from, cancelled: false, withdrawn: false };
+    // A restart continues from the saved cursor; old escrows never require an unbounded scan.
+    for (let page = 0; page < 10 && scan.cursor < head && !scan.cancelled && !scan.withdrawn; page++) {
+      const to = head - 1n < scan.cursor + 1999n ? head - 1n : scan.cursor + 1999n;
+      for (const log of await logs(chain, address, scan.cursor, to)) {
+        if (log.topics[0] === EscrowCancelledEvent.TOPIC) scan.cancelled = true;
+        if (log.topics[0] === EscrowWithdrawalEvent.TOPIC) scan.withdrawn = true;
+      }
+      scan.cursor = to + 1n;
+    }
+    return cancelled ? scan.cancelled : scan.withdrawn;
   }
   return {
     async verify(p: FusionRecord, fill: ReadyToAcceptSecretFill): Promise<VerifiedPair> {
@@ -97,10 +108,10 @@ export function createEscrowVerifier(config: Config, rpc: (chain: TradingChain) 
       let resolved = 0n;
       for (const item of known) {
         const i = Immutables.fromABIEncoded(item.immutables);
-        if (await terminal(p.action.from.chainId, item.source as Address, item.sourceBlock, true)) { resolved += i.amount; continue; }
+        if (await terminal(p, p.action.from.chainId, item.source as Address, item.sourceBlock, true)) { resolved += i.amount; continue; }
         const pair = Object.values(p.fills).find(v => (v as VerifiedPair).source === item.source) as VerifiedPair | undefined;
-        if (!pair || !await terminal(p.action.from.chainId, pair.source, pair.srcBlock, false)
-          || !await terminal(p.action.to.chainId, pair.destination, pair.dstBlock, false)) return false;
+        if (!pair || !await terminal(p, p.action.from.chainId, pair.source, pair.srcBlock, false)
+          || !await terminal(p, p.action.to.chainId, pair.destination, pair.dstBlock, false)) return false;
         resolved += i.amount;
       }
       const expired = restoreOrder(p).deadline < BigInt(Math.floor(Date.now() / 1000)) - 60n;
@@ -110,8 +121,8 @@ export function createEscrowVerifier(config: Config, rpc: (chain: TradingChain) 
       const now = BigInt(Math.floor(Date.now() / 1000));
       for (const item of Object.values(p.discovered ?? {})) {
         const src = Immutables.fromABIEncoded(item.immutables), chainId = p.action.from.chainId;
-        if (now < src.timeLocks.toSrcTimeLocks().publicCancellation || await terminal(chainId, item.source as Address, item.sourceBlock, true)
-          || await terminal(chainId, item.source as Address, item.sourceBlock, false)) continue;
+        if (now < src.timeLocks.toSrcTimeLocks().publicCancellation || await terminal(p, chainId, item.source as Address, item.sourceBlock, true)
+          || await terminal(p, chainId, item.source as Address, item.sourceBlock, false)) continue;
         const i = src.build();
         const data = encodeFunctionData({ abi: escrowAbi, functionName: 'publicCancel', args: [{ ...i, orderHash: i.orderHash as Hex, hashlock: i.hashlock as Hex,
           maker: BigInt(i.maker), taker: BigInt(i.taker), token: BigInt(i.token), amount: BigInt(i.amount), safetyDeposit: BigInt(i.safetyDeposit), timelocks: BigInt(i.timelocks), parameters: i.parameters as Hex }] });

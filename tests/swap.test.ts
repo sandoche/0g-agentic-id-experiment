@@ -56,6 +56,16 @@ it('keeps unsigned/broadcast-free state when saving fails', async () => {
   await expect(runner.send({ chainId: 56, to: ROUTER, data: '0x', value: 0n })).rejects.toThrow('DISK_FULL');
   expect(broadcast).not.toHaveBeenCalled();
 });
+it('recovers a crash before broadcast by resending only the persisted signed bytes', async () => {
+  const store = state(), raw = '0x1234' as const, j = await store.load();
+  j.pending = { kind: 'transaction', id: keccak256(raw), payload: { chainId: 56, raw } }; await store.save(j);
+  const sign = vi.fn(), broadcast = vi.fn(async () => {});
+  const runner = createTransactionRunner(store, { sign, broadcast, receipt: async () => undefined });
+  expect(await runner.reconcile()).toBe('pending'); expect(await runner.reconcile()).toBe('pending');
+  expect(sign).not.toHaveBeenCalled(); expect(broadcast).toHaveBeenCalledTimes(2);
+  expect(broadcast.mock.calls[0]).toEqual([56, raw]); expect(broadcast.mock.calls[1]).toEqual([56, raw]);
+  expect((await store.load()).pending?.id).toBe(keccak256(raw));
+});
 it('records revert and stops the current operation', async () => {
   const store = state();
   const runner = createTransactionRunner(store, { sign: async () => '0x1234', broadcast: async () => {}, receipt: async () => 'reverted' });

@@ -21,6 +21,7 @@ npm run agent -- simulate --once
 Keep your existing `.env`. The example contains demonstration weights and a sample
 prompt. Put your own `PORTFOLIO_ALLOCATIONS` and `STRATEGY_PROMPT` in `.env`;
 weights use basis points and must total 10000. Never commit this file.
+Quoted multiline prompts and allocation JSON are supported; unclosed values fail.
 Offline simulation uses synthetic $1 token prices, a paper ledger, and no API keys
 or signatures. An empty paper account starts with 1000 funding-chain stablecoins.
 Without `--once`, it repeats every five minutes until Ctrl+C.
@@ -83,6 +84,8 @@ under `workspace/skills/portfolio/`. Strategy/state survive there through the se
 workspace lifecycle. No private strategy is included in the activation message.
 The 1inch key is sent separately through a one-use owner-signed configuration
 endpoint and stays in memory. Restarting requires configuration again.
+Configured attestor/RPC endpoints travel inside the encrypted capability. Dependency
+installation is marked complete only after `npm ci` succeeds for the matching lock.
 
 ## 💸 Investment funding
 
@@ -128,6 +131,10 @@ and timelocks. Partial fills stay reserved. Expiry is not a refund. Permitted pu
 escrow cancellation is simulated before signing; inaccessible recovery remains
 pending for the resolver. Stopping prevents further signatures but cannot undo an
 already submitted transaction or order. Keep monitoring unresolved orders.
+Live recovery may rebroadcast the identical saved transaction bytes, preserving its
+nonce and hash. Simulation leaves pending live execution reserved and performs no
+recovery writes. Re-enable explicit live mode to resume it. Long-outage escrow scans
+save their progress and continue in bounded pages.
 
 ## 🔁 Transfer, clone and reset
 
@@ -148,8 +155,13 @@ Actual funded transfer/clone behavior is still a credential-dependent check; see
 
 The sealed worker writes redacted JSONL events under its persisted skill state.
 `status` and `watch` verify the sealed response signature against the on-chain agent,
-expiry, declared iData and the hash of the exact HTTP transcript. Verified response
+expiry, the complete current iData set, the expected submitter, and the hash of the exact HTTP transcript. Verified response
 bytes and proof metadata are saved under ignored `.local/proofs/`.
+The first signed runtime measurement must be approved by the on-chain framework
+registry; it is then pinned under `.local/proof-bindings/`. Later image changes fail
+verification until that pin is reviewed and deliberately removed. The protocol has
+no per-agent image getter: this first-use pin trusts the registry's approved set,
+and is not an independent audit of the image or a separately pinned build digest.
 
 ```powershell
 npm run agent -- verify-proof --file .local/proofs/FILE.json --agent 123

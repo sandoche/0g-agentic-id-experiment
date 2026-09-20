@@ -10,7 +10,7 @@
 
 **Spec:** [Approved design and subsequent user amendments](../specs/2026-09-19-agentic-portfolio-design.md).
 
-**Status:** Ready for plan review. The design, environment template, and local ignored environment exist. Product implementation has not started.
+**Status:** Tasks 1–8 implemented. Independent whole-branch review completed; regression fixes and verification are recorded in `docs/verification.md`.
 
 ## Global Constraints
 

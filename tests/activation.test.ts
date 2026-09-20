@@ -3,6 +3,7 @@ import { AgenticID, type AgentClient } from '@0gfoundation/0g-agenticid-sdk';
 import { privateKeyToAccount } from 'viem/accounts';
 import { activate } from '../src/agent.js';
 import { taskHash } from '../src/proof.js';
+import * as proofModule from '../src/proof.js';
 import { config } from './fixtures.js';
 it('activates once, verifies readiness, then configures keys outside chat on both calls', async () => {
   const key = `0x${'03'.repeat(32)}` as const, owner = privateKeyToAccount(key), wallet = owner.address;
@@ -21,6 +22,7 @@ it('activates once, verifies readiness, then configures keys outside chat on bot
     },
   } as unknown as AgentClient;
   const mock = vi.spyOn(AgenticID, 'fromAttestor').mockResolvedValue({ agent: { client: async () => client, getAgentSeal: async () => wallet }, reputation: { verifyProof: async () => ({ ok: true }) } } as unknown as AgenticID);
+  const proofMock = vi.spyOn(proofModule, 'createProofVerifier').mockResolvedValue(async () => true);
   try {
     const cfg = { ...config, credentials: { ownerKey: key, oneinch: 'synthetic-secret' } };
     expect((await activate(cfg, 1n, 'fixture')).state).toBe('ready');
@@ -29,5 +31,5 @@ it('activates once, verifies readiness, then configures keys outside chat on bot
     expect(JSON.stringify(chat.mock.calls)).not.toContain('synthetic-secret');
     expect(JSON.stringify(chat.mock.calls)).not.toContain(config.strategy.prompt);
     started = false; await activate(cfg, 1n, 'fixture'); expect(chat).toHaveBeenCalledTimes(2); // reset reconstructs without strategy in the message
-  } finally { mock.mockRestore(); }
+  } finally { mock.mockRestore(); proofMock.mockRestore(); }
 });

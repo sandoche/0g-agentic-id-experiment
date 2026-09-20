@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { getAsset } from './assets.js';
-import type { Strategy } from './types.js';
+import type { Strategy, Config } from './types.js';
 const limit = 8 * 1024 * 1024;
 const allowed = new Set(['worker.mjs', 'package.json', 'package-lock.json', 'runtime.json', 'start.cjs', 'SKILL.md']);
 export const sha256 = (s: string | Uint8Array) => createHash('sha256').update(s).digest('hex');
@@ -13,7 +13,9 @@ const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
 for(const [file,hash] of Object.entries(manifest.files)){if(crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==hash)throw Error('PACKAGE_CHECKSUM');}
 fs.mkdirSync('state',{recursive:true,mode:448});
 try{const lock=JSON.parse(fs.readFileSync('state/worker.lock','utf8'));process.kill(lock.pid,0);console.log('Worker already running; use the signed status endpoint.');process.exit(0);}catch(e){if(e.code!=='ENOENT'&&e.code!=='ESRCH')throw e;}
-if(!fs.existsSync('node_modules')){const r=cp.spawnSync(process.platform==='win32'?'npm.cmd':'npm',['ci','--omit=dev','--ignore-scripts','--no-audit','--no-fund'],{stdio:'ignore',shell:process.platform==='win32'});if(r.status!==0)throw Error('DEPENDENCY_INSTALL_FAILED');}
+const installHash=crypto.createHash('sha256').update(fs.readFileSync('package.json')).update(fs.readFileSync('package-lock.json')).digest('hex'),marker='node_modules/.portfolio-install';
+let installed=false;try{installed=fs.readFileSync(marker,'utf8')===installHash;}catch(e){if(e.code!=='ENOENT')throw e;}
+if(!installed){const r=cp.spawnSync(process.platform==='win32'?'npm.cmd':'npm',['ci','--omit=dev','--ignore-scripts','--no-audit','--no-fund'],{stdio:'ignore',shell:process.platform==='win32'});if(r.status!==0)throw Error('DEPENDENCY_INSTALL_FAILED');fs.writeFileSync(marker+'.tmp',installHash,{mode:384});fs.renameSync(marker+'.tmp',marker);}
 const log=fs.openSync('state/process.log','a',384);
 const child=cp.spawn(process.execPath,['worker.mjs','--agent-id',id],{cwd:__dirname,env:process.env,detached:true,stdio:['ignore',log,log],windowsHide:true});child.unref();fs.closeSync(log);
 console.log('Worker launched; verify identity and checksum through /api/status.');`;
@@ -28,9 +30,12 @@ for(const [name,file] of Object.entries(pack.files))fs.writeFileSync(p.join(dir,
 fs.writeFileSync(p.join(dir,'manifest.json'),JSON.stringify({sha256:m[1],files:hashes}),{mode:384});
 const r=cp.spawnSync(process.execPath,[p.join(dir,'start.cjs'),process.argv[1]],{stdio:'inherit'});process.exit(r.status===0?0:1);`;
 export const bootstrapCommand = `node -e "eval(Buffer.from('${Buffer.from(bootstrapProgram).toString('base64')}','base64').toString())"`;
-export function buildCapability(strategy: Strategy, workerFiles: Record<string, string>) {
+export function buildCapability(strategy: Strategy, workerFiles: Record<string, string>, connection?: Pick<Config, 'attestorUrl' | 'rpcUrls' | 'model'>) {
   for (const path of Object.keys(workerFiles)) if (!['worker.mjs', 'package.json', 'package-lock.json'].includes(path)) throw new Error('UNSAFE_PAYLOAD_PATH');
   const runtime = {
+    ...(connection ? { AGENTIC_ATTESTOR_URL: connection.attestorUrl, INFERENCE_MODEL: connection.model,
+      BASE_RPC_URL: connection.rpcUrls[8453], ARBITRUM_RPC_URL: connection.rpcUrls[42161],
+      ROBINHOOD_RPC_URL: connection.rpcUrls[4663], BNB_RPC_URL: connection.rpcUrls[56] } : {}),
     STRATEGY_PROMPT: strategy.prompt,
     PORTFOLIO_ALLOCATIONS: JSON.stringify(strategy.targets.map(t => { const a = getAsset(t.assetId); return { symbol: a.symbol, chainId: a.chainId, weightBps: Number(t.weightBps) }; })),
     FUNDING_CHAIN_ID: String(strategy.fundingChain), REBALANCE_INTERVAL_MS: String(strategy.intervalMs), MAX_SLIPPAGE_BPS: String(strategy.slippageBps),

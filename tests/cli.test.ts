@@ -14,6 +14,16 @@ it('selectively loads allowed keys and never includes the owner key for read-onl
     expect(await readFile(path, 'utf8')).toBe(text);
   } finally { await rm(d, { recursive: true, force: true }); }
 });
+it('preserves selected multiline dotenv values and rejects an unterminated prompt', async () => {
+  const d = await mkdtemp(join(tmpdir(), 'portfolio-env-')), path = join(d, '.env');
+  try {
+    await writeFile(path, 'OWNER_PRIVATE_KEY=synthetic-private\nSTRATEGY_PROMPT="First line\nSecond line"\nPORTFOLIO_ALLOCATIONS=\'[\n{"symbol":"TAO"}\n]\'\n');
+    const env = await loadEnvironment(path, false);
+    expect(env.STRATEGY_PROMPT).toBe('First line\nSecond line'); expect(JSON.parse(env.PORTFOLIO_ALLOCATIONS!)).toEqual([{ symbol: 'TAO' }]);
+    expect(env.OWNER_PRIVATE_KEY).toBeUndefined();
+    await writeFile(path, 'STRATEGY_PROMPT="First line\n'); await expect(loadEnvironment(path, false)).rejects.toThrow('ENV_UNTERMINATED_VALUE');
+  } finally { await rm(d, { recursive: true, force: true }); }
+});
 it('runs the CLI without real keys and fails unknown commands or missing configuration', async () => {
   const d = await mkdtemp(join(tmpdir(), 'portfolio-cli-'));
   const cli = resolve('src/cli.ts'), tsx = resolve('node_modules/tsx/dist/cli.mjs');

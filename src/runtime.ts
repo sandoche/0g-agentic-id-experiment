@@ -54,7 +54,7 @@ async function main() {
   await atomicWrite('state/ready.json', JSON.stringify({ ...identity, checksum, port: server.port, pid: process.pid }));
   await worker.emit({ type: 'ready', time: Date.now() }); worker.start();
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => {
-    void (async () => { await worker.stop(); await server.close(); await store.close(); process.exit(0); })().catch(() => process.exit(1));
+    void (async () => { await worker.stop(); await worker.drain(); await server.close(); await store.close(); process.exit(0); })().catch(() => process.exit(1));
   });
 }
 main().catch(() => { console.error('WORKER_START_FAILED'); process.exit(1); });

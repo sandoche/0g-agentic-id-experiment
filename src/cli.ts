@@ -15,7 +15,7 @@ import { createWorker } from './worker.js';
 import { activate, checkModel, deploymentPreflight, loadDeployment, mintOrResume, probeInference } from './agent.js';
 import { requestJson } from './market.js';
 import { onlineCheck, gasCheck } from './preflight.js';
-import { readProven, verifyTranscript } from './proof.js';
+import { readProven, verifyTranscript, createProofVerifier } from './proof.js';
 import { authMessage, type Challenge } from './auth.js';
 import type { Config } from './types.js';
 import { paperMarket } from './paper.js';
@@ -46,7 +46,7 @@ async function simulate(config: Config, once: boolean) {
   console.log('simulation: synthetic $1 token prices and paper balances; no network requests or signatures.');
   await worker.configure({ oneinch: 'paper-only', mode: 'simulation' }, wallet); await worker.tick();
   if (!once) { worker.start(); await new Promise<void>(r => { process.once('SIGINT', r); process.once('SIGTERM', r); }); }
-  await worker.stop(); await store.close();
+  await worker.stop(); await worker.drain(); await store.close();
   if (worker.events(0).some(e => e.type === 'error')) throw new Error('SIMULATION_FAILED');
 }
 export async function runCli(args: string[], env: Record<string, string | undefined>): Promise<number> {
@@ -78,7 +78,8 @@ export async function runCli(args: string[], env: Record<string, string | undefi
       const record = parse(await readFile(values.file, 'utf8'));
       const ag = await AgenticID.fromAttestor(config.attestorUrl);
       const id = values.agent ? BigInt(values.agent) : record.proof.agentId;
-      await verifyTranscript(record.proof, id, record.path, Buffer.from(record.responseBase64, 'base64'), record.status, async p => (await ag.reputation.verifyProof(p)).ok);
+      const submitter = record.proof.submitter === '0x0000000000000000000000000000000000000000' ? record.proof.submitter : await ag.agent.ownerOf(id);
+      await verifyTranscript(record.proof, id, record.path, Buffer.from(record.responseBase64, 'base64'), record.status, await createProofVerifier(config, ag, id, submitter));
       console.log(`Verified current proof for agent ${id}.`); return 0;
     }
     if (!values.agent || !/^\d+$/.test(values.agent)) throw new Error('AGENT_ID_REQUIRED');
@@ -105,8 +106,9 @@ export async function runCli(args: string[], env: Record<string, string | undefi
       console.log(JSON.stringify(await activate(config, agentId, checksum))); return 0;
     }
     const client = await ag.agent.client(agentId);
+    const verify = await createProofVerifier(config, ag, agentId, config.credentials.ownerKey ? privateKeyToAccount(config.credentials.ownerKey).address : undefined);
     if (command === 'stop') {
-      const challenge = await readProven<Challenge>(ag, client, agentId, '/api/challenge');
+      const challenge = await readProven<Challenge>(ag, client, agentId, '/api/challenge', verify);
       if (challenge.agentId !== String(agentId) || challenge.wallet.toLowerCase() !== wallet.toLowerCase()) throw new Error('CHALLENGE_IDENTITY_MISMATCH');
       const payload = '{}', signature = await privateKeyToAccount(config.credentials.ownerKey!).signMessage({ message: authMessage('stop', challenge, payload) });
       const response = await client.fetch('/api/stop', { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challenge, payload, signature }), signal: AbortSignal.timeout(15000) });
@@ -117,7 +119,7 @@ export async function runCli(args: string[], env: Record<string, string | undefi
       let cursor = 0;
       do {
         const path = command === 'watch' ? `/api/events?after=${cursor}` : '/api/status';
-        const result = await readProven<{ events?: { sequence: number }[] }>(ag, client, agentId, path, '.local/proofs'); console.log(JSON.stringify(result));
+        const result = await readProven<{ events?: { sequence: number }[] }>(ag, client, agentId, path, verify, '.local/proofs'); console.log(JSON.stringify(result));
         if (result.events?.length) cursor = result.events[result.events.length - 1]!.sequence;
         if (command !== 'watch' || values.once) break;
         await delay(15000, undefined, { signal: abort.signal });

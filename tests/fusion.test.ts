@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { AuctionDetails, EvmAddress, EvmCrossChainOrder, ESCROW_FACTORY, HashLock, TimeLocks, Immutables, DstImmutablesComplement, EvmEscrowFactoryFacade, ESCROW_SRC_IMPLEMENTATION, ESCROW_DST_IMPLEMENTATION, SrcEscrowCreatedEvent, DstEscrowCreatedEvent } from '@1inch/cross-chain-sdk';
+import { AuctionDetails, EvmAddress, EvmCrossChainOrder, ESCROW_FACTORY, HashLock, TimeLocks, Immutables, DstImmutablesComplement, EvmEscrowFactoryFacade, ESCROW_SRC_IMPLEMENTATION, ESCROW_DST_IMPLEMENTATION, SrcEscrowCreatedEvent, DstEscrowCreatedEvent, EscrowCancelledEvent } from '@1inch/cross-chain-sdk';
 import { encodeAbiParameters, parseAbiParameters } from 'viem';
 import { restoreOrder, validateOrder, createFusionLifecycle, type FusionRecord } from '../src/fusion.js';
 import { validateEscrowPair, createEscrowVerifier } from '../src/escrow.js';
@@ -60,6 +60,26 @@ function memory(): Store {
   let j: Journal = { version: 1, wallet, owner: wallet, sequence: 0 };
   return { load: async () => structuredClone(j), save: async v => { j = structuredClone(v); }, lock: async () => {}, close: async () => {} };
 }
+it('advances and persists bounded terminal scans after an outage over 20000 blocks', async () => {
+  let p = fusionRecord(); const now = BigInt(Math.floor(Date.now() / 1000));
+  const src = Immutables.new({ orderHash: Buffer.from(p.hash.slice(2), 'hex'), hashLock, maker, taker, token: EvmAddress.fromString(usdBase.address), amount: p.action.amount, safetyDeposit: 1n, timeLocks: locks }).withDeployedAt(now - 2000n);
+  const address = new EvmEscrowFactoryFacade(8453, ESCROW_FACTORY[8453]).getSrcEscrowAddress(src, ESCROW_SRC_IMPLEMENTATION[8453]).toString();
+  p.sourceCursor = 50000n; p.discovered = { [address]: { source: address, sourceBlock: 1n, immutables: src.toABIEncoded(), complement: '{}' } };
+  const calls: bigint[] = [];
+  const rpc = (chain: number) => ({ getChainId: async () => chain, getBlockNumber: async () => 50001n,
+    getLogs: async ({ address: requested, fromBlock, toBlock }: { address: string; fromBlock: bigint; toBlock: bigint }) => {
+      if (requested.toLowerCase() !== address.toLowerCase()) return [];
+      expect(toBlock - fromBlock).toBeLessThanOrEqual(1999n); calls.push(fromBlock);
+      return fromBlock <= 45000n && toBlock >= 45000n ? [{ topics: [EscrowCancelledEvent.TOPIC] }] : [];
+    },
+  });
+  let settled = false;
+  for (let n = 0; n < 30 && !settled; n++) {
+    settled = await createEscrowVerifier(config, rpc as unknown as Parameters<typeof createEscrowVerifier>[1]).settled(p);
+    p = structuredClone(p); // persisted state, new verifier instance after restart
+  }
+  expect(settled).toBe(true); expect(calls.filter(n => n === 1n)).toHaveLength(1);
+});
 it('tracks separate partial-fill secrets without freeing the reserved order', async () => {
   const store = memory(), secrets = [secret, `0x${'cd'.repeat(32)}`, `0x${'ef'.repeat(32)}`], p = fusionRecord(secrets), disclose = vi.fn();
   const port = { submit: async () => {}, ready: async () => [0, 1].map(idx => ({ idx, srcEscrowDeployTxHash: `src${idx}`, dstEscrowDeployTxHash: `dst${idx}` })),

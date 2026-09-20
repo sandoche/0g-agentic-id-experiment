@@ -8,7 +8,7 @@ import { buildCapability } from './bootstrap.js';
 import type { Config } from './types.js';
 import { privateKeyToAccount } from 'viem/accounts';
 import { setTimeout as delay } from 'node:timers/promises';
-import { readProven } from './proof.js';
+import { readProven, createProofVerifier } from './proof.js';
 import { authMessage, type Challenge } from './auth.js';
 export function openclawConfig(model: string) {
   return { agents: { defaults: { model: { primary: `openai/${model}` } } }, models: { providers: { openai: {
@@ -58,7 +58,7 @@ export async function deploymentPreflight(config: Config) {
 export async function mintOrResume(config: Config, directory = '.local', log: (message: string) => void = console.log) {
   const files: Record<string, string> = {};
   for (const name of ['worker.mjs', 'package.json', 'package-lock.json']) files[name] = await readFile(join('dist', name), 'utf8');
-  const capability = buildCapability(config.strategy, files);
+  const capability = buildCapability(config.strategy, files, config);
   await checkModel(config.model, capability.bytes);
   const { ag, available, required, native, acknowledgments } = await deploymentPreflight(config);
   if (available < required) throw new Error(`SANDBOX_FUNDING_REQUIRED:${required - available}`);
@@ -89,9 +89,10 @@ export async function activate(config: Config, agentId: bigint, checksum?: strin
   const client = await ag.agent.client(agentId);
   if (new URL(client.base).protocol !== 'https:') throw new Error('HTTPS_REQUIRED');
   const wallet = await ag.agent.getAgentSeal(agentId);
+  const verify = await createProofVerifier(config, ag, agentId, privateKeyToAccount(config.credentials.ownerKey).address);
   type Status = { agentId: string; wallet: string; checksum: string; state: string; instance: string };
   const status = async () => {
-    const s = await readProven<Status>(ag, client, agentId, '/api/status', '.local/proofs');
+    const s = await readProven<Status>(ag, client, agentId, '/api/status', verify, '.local/proofs');
     if (s.agentId !== String(agentId) || s.wallet.toLowerCase() !== wallet.toLowerCase() || (checksum && s.checksum !== checksum)) throw new Error('WORKER_IDENTITY_MISMATCH');
     return s;
   };
@@ -103,7 +104,7 @@ export async function activate(config: Config, agentId: bigint, checksum?: strin
     for (let attempt = 0; attempt < 30 && !ready; attempt++) { try { ready = await status(); } catch { await delay(2000); } }
     if (!ready) throw new Error('WORKER_NOT_READY');
   }
-  const challenge = await readProven<Challenge>(ag, client, agentId, '/api/challenge');
+  const challenge = await readProven<Challenge>(ag, client, agentId, '/api/challenge', verify);
   if (challenge.agentId !== String(agentId) || challenge.wallet.toLowerCase() !== wallet.toLowerCase() || challenge.instance !== ready.instance) throw new Error('CHALLENGE_IDENTITY_MISMATCH');
   const payload = JSON.stringify({ oneinch: config.credentials.oneinch, mode: config.mode });
   const signature = await privateKeyToAccount(config.credentials.ownerKey).signMessage({ message: authMessage('configure', challenge, payload) });

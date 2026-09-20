@@ -44,3 +44,34 @@ The explicit `activate --live` command is required before investment execution.
 Source and workflow decisions are documented in the implementation plan and the
 code. The final independent review and any material fixes are recorded with the
 commits that implement them.
+
+## Independent review
+
+One fresh-context review covered `0feed15..51e5710`, with no private environment
+access. Its eight Important findings were reproduced and addressed in one fix pass:
+
+- Simulation leaves existing live orders reserved without invoking recovery.
+- Pending transactions can rebroadcast identical saved bytes, with the current-owner guard.
+- Interrupted dependency installs retry until a matching lockfile completion marker exists.
+- Escrow terminal-event scans persist bounded progress across long outages/restarts.
+- Proofs require the entire current data set, expected submitter and a registry-approved
+  framework measurement; the first verified measurement is pinned for future checks.
+- Stop invalidates earlier configuration; shutdown drains active work before unlocking.
+- The encrypted runtime restores configured attestor/RPC endpoints.
+- Selected multiline dotenv values are preserved; unterminated values fail explicitly.
+
+No Minor findings were reported. The reviewer deferred actual funded execution to
+its separate credential-dependent check. It found no practical bypass of escrow
+identity using the existing official factory events and deterministic addresses;
+the bytecode check itself remains a substring check, not a full runtime fingerprint.
+
+The clean-install CI initially caught a missing optional websocket peer in the lock.
+After regenerating that entry with npm 10, Windows and Linux Node 22 both passed
+installation, typecheck, tests, build and offline CLI simulation at `3d46809`.
+The final fix revision is rerun separately before completion.
+
+Final local verification after all eight fixes: **143 passed, 1 Linux-only test
+skipped on Windows**, strict typecheck, production build, offline CLI simulation,
+and whitespace checks passed. The opaque private-policy comparison passed for
+all source-controlled candidate files; no private key value was selected or printed.
+See [implementation decisions](implementation-decisions.md) for the preserved ledger.

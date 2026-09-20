@@ -15,6 +15,7 @@ export type FusionRecord = {
   disclosed: number[]; fills: Record<string, unknown>; sourceBlock: bigint; minimum: bigint;
   signature?: Hex; recovery?: { kind: 'transaction'; id: string; payload: unknown }; cancelled?: boolean;
   sourceCursor?: bigint; discovered?: Record<string, { source: string; sourceBlock: bigint; immutables: string; complement: string }>;
+  terminalScans?: Record<string, { cursor: bigint; cancelled: boolean; withdrawn: boolean }>;
 };
 export function restoreOrder(p: FusionRecord): EvmCrossChainOrder {
   const order = EvmCrossChainOrder.fromDataAndExtension(p.order, Extension.decode(p.extension));
@@ -64,6 +65,7 @@ export function createFusionLifecycle(store: Store, port: FusionLifecyclePort) {
       const j = await store.load(); if (!j.pending) return 'settled'; if (j.pending.kind !== 'fusion') return 'pending';
       const p = j.pending.payload as FusionRecord; validateOrder(p, true);
       if (await port.settle(p)) { delete j.pending; await store.save(j); return 'settled'; }
+      await save(p); // Preserve bounded scan progress even if a later API/recovery step fails.
       for (const fill of await port.ready(p)) {
         if (!Number.isInteger(fill.idx) || fill.idx < 0 || fill.idx >= p.secrets.length) throw new Error('INVALID_SECRET_INDEX');
         if (p.disclosed.includes(fill.idx)) continue;
@@ -72,7 +74,7 @@ export function createFusionLifecycle(store: Store, port: FusionLifecyclePort) {
         await save(p); await port.disclose(p.hash, p.secrets[fill.idx]!);
         p.disclosed.push(fill.idx); p.state = 'partially-filled'; await save(p);
       }
-      await port.recover(p); await save(p); return 'pending';
+      try { await port.recover(p); } finally { await save(p); } return 'pending';
     },
   };
 }

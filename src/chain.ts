@@ -48,6 +48,7 @@ export function createChain(config: Config, account: LocalAccount, store: Store,
     async broadcast(chain, raw) {
       const client = rpc(chain);
       if (await client.getChainId() !== chain) throw new Error('RPC_CHAIN_MISMATCH');
+      await guard();
       return client.sendRawTransaction({ serializedTransaction: raw });
     },
     async receipt(chain, hash) {
