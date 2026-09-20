@@ -19,6 +19,27 @@ test("parses weights exactly without requiring keys for simulation", () => {
 	).toEqual([6000n, 4000n]);
 	expect(config.model).toBe("glm-5.3");
 });
+test.each([undefined, ""])(
+	"defaults an unset or empty attestor to mainnet without enabling live trading (%s)",
+	(attestor) => {
+		const config = readConfig({ ...input, AGENTIC_ATTESTOR_URL: attestor });
+		expect(config.attestorUrl).toBe("https://agenticid-mainnet.0g.ai");
+		expect(config.mode).toBe("simulation");
+	},
+);
+test.each([
+	"https://agenticid-mainnet.0g.ai",
+	"https://agenticid.0g.ai",
+	"https://attestor.example",
+])("preserves the explicitly selected AgenticID environment %s", (endpoint) => {
+	const config = readConfig({
+		...input,
+		AGENTIC_ATTESTOR_URL: `${endpoint}/`,
+	});
+	expect(config.attestorUrl).toBe(endpoint);
+	expect(config.rpcUrls).toEqual(readConfig(input).rpcUrls);
+	expect(config.mode).toBe("simulation");
+});
 test.each([1, 16602, 46630, 0, NaN])(
 	"rejects forbidden trading chain %s",
 	(chain) => {

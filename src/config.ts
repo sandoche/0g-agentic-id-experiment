@@ -121,7 +121,9 @@ export function readConfig(env: Record<string, string | undefined>): Config {
 		},
 		mode,
 		model: env.INFERENCE_MODEL?.trim() || "glm-5.3",
-		attestorUrl: url(env.AGENTIC_ATTESTOR_URL || "https://agenticid.0g.ai"),
+		attestorUrl: url(
+			env.AGENTIC_ATTESTOR_URL || "https://agenticid-mainnet.0g.ai",
+		),
 		rpcUrls: {
 			8453: url(env.BASE_RPC_URL || "https://mainnet.base.org"),
 			42161: url(env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc"),
