@@ -2,6 +2,30 @@
 $ErrorActionPreference = 'Stop'
 Push-Location (Split-Path $PSScriptRoot -Parent)
 try {
+    # Native tools are not installed by APM's skill dependency resolver.
+    $rtkCommand = Get-Command rtk -ErrorAction SilentlyContinue
+    if (-not $rtkCommand) {
+        # An already-open terminal may predate a successful RTK installation.
+        $env:Path += ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+        $rtkCommand = Get-Command rtk -ErrorAction SilentlyContinue
+    }
+    if (-not $rtkCommand) {
+        $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $wingetCommand) {
+            throw 'Install RTK using https://github.com/rtk-ai/rtk/blob/develop/INSTALL.md, reopen the terminal, and rerun setup.'
+        }
+        & $wingetCommand.Source install --id rtk-ai.rtk --exact --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
+        if ($LASTEXITCODE -ne 0) { throw "RTK installation failed ($LASTEXITCODE)." }
+        # Winget updates the persisted PATH, not this running shell.
+        $env:Path += ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+        $rtkCommand = Get-Command rtk -ErrorAction SilentlyContinue
+        if (-not $rtkCommand) { throw 'RTK was installed. Reopen the terminal and rerun setup.' }
+    }
+    & $rtkCommand.Source --version
+    if ($LASTEXITCODE -ne 0) { throw 'RTK version verification failed.' }
+    & $rtkCommand.Source gain
+    if ($LASTEXITCODE -ne 0) { throw 'Expected rtk-ai/rtk (Rust Token Killer), with a working gain command.' }
+
     $memoryCommand = Get-Command codebase-memory-mcp -ErrorAction SilentlyContinue
     if (-not $memoryCommand) {
         throw 'Install the Codebase Memory native runtime and reopen the terminal: https://deusdata.github.io/codebase-memory-mcp/'
@@ -44,7 +68,7 @@ try {
     $bootstrapDirectory = '.codex/hooks/superpowers/skills/using-superpowers'
     New-Item -ItemType Directory -Force -Path $bootstrapDirectory | Out-Null
     Copy-Item -LiteralPath '.agents/skills/using-superpowers/SKILL.md' -Destination "$bootstrapDirectory/SKILL.md" -Force
-    Write-Host 'Agent setup complete: Superpowers, Caveman, and Codebase Memory MCP configured through APM.'
+    Write-Host 'Agent setup complete: RTK verified; Superpowers, Caveman, and Codebase Memory MCP configured through APM. Restart your terminal and Codex session to load PATH and shared RTK instructions.'
 } finally {
     Pop-Location
 }

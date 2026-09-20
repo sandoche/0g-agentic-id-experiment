@@ -210,6 +210,13 @@ Agent tooling is managed with [Microsoft APM](https://microsoft.github.io/apm/).
 local code indexing and graph queries through MCP.
 
 APM manages both skill dependencies and the Codebase Memory MCP configuration.
+It also exposes the RTK setup and verification commands through `apm run`.
+[RTK (Rust Token Killer)](https://github.com/rtk-ai/rtk) compresses shell output
+for coding agents. The tracked `AGENTS.md` and `RTK.md` instruct Codex users of
+this repository to use it, without a machine-specific instruction path.
+This is instruction-based integration, not an automatic command-rewriting hook
+or enforcement on human terminal commands.
+
 The native Codebase Memory executable is a separate prerequisite, already
 installed on the setup machine (verified version: 0.10.8). APM's self-defined
 stdio entry configures this executable; it does not download or version-pin it.
@@ -236,6 +243,31 @@ Open a new terminal, then run from this repository:
 apm audit --ci
 ```
 
+Alternatively, when APM is on PATH, run `apm run setup`. The setup installs RTK
+with `winget install --id rtk-ai.rtk --exact --source winget` if it is missing,
+then verifies `rtk --version` and `rtk gain`. Windows App Installer supplies
+Winget. If Winget is unavailable, follow the
+[RTK installation guide](https://github.com/rtk-ai/rtk/blob/develop/INSTALL.md)
+and rerun setup. The prebuilt Windows package needs no Rust compiler or Python.
+RTK was verified here at 0.48.0; Winget selects its available release on a new
+machine. RTK is a native prerequisite, not a pinned APM skill dependency.
+
+After installation, restart the terminal and Codex desktop app so they inherit
+the updated PATH, then verify:
+
+```powershell
+apm run rtk-check
+apm run rtk-gain
+rtk git status
+```
+
+On macOS/Linux, install RTK using its upstream guide and run `apm install --frozen`
+after installing APM and Codebase Memory. The shared RTK instructions work across
+platforms; `apm run setup` is the Windows PowerShell setup entry point.
+Use `rtk proxy <command>` when a command needs unfiltered output or has no RTK
+filter. For PowerShell builtins, wrap the shell itself, for example
+`rtk proxy powershell -NoProfile -Command "Get-Location"`.
+
 The setup was verified with APM 0.31.0. Git for Windows (including Bash) is
 required for the upstream startup hook. Start a new Codex task/session after
 setup to load the project skills and startup hook.
@@ -250,6 +282,7 @@ on the setup machine. Graph data remains in the local Codebase Memory store.
 - `.agents/skills/` contains the installed skills and their supporting files.
 - `.codex/hooks.json` and `.codex/hooks/` contain the startup hook.
 - `.codex/config.toml` contains the APM-generated Codebase Memory MCP entry.
+- `AGENTS.md` and `RTK.md` contain the shared Codex RTK instructions.
 - `apm_modules/` is a generated dependency cache and is ignored by Git.
 
 Keep the manifest, lockfile, deployed skills, and hooks in version control.
