@@ -15,6 +15,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check formatting, lint, and imports with Biome
+        run: npx --no-install biome ci .
       - run: npm run typecheck
       - run: npm test -- --run
       - run: npm run build
