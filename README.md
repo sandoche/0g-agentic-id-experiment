@@ -26,6 +26,29 @@ Offline simulation uses synthetic $1 token prices, a paper ledger, and no API ke
 or signatures. An empty paper account starts with 1000 funding-chain stablecoins.
 Without `--once`, it repeats every five minutes until Ctrl+C.
 
+## Development checks
+
+Biome uses its default formatter and recommended lint rules for the TypeScript
+source, tests, build scripts, and root configuration. Generated output, the npm
+lockfile, and downloaded APM skills are excluded.
+
+```sh
+npm run check        # Check formatting, lint, and import ordering
+npm run check:fix    # Apply formatting and safe fixes
+npm run lint         # Lint only
+npm run format      # Format files
+npm run format:check # Check formatting without writing
+```
+
+`npm ci` installs Lefthook's pre-commit hook automatically. If install scripts were
+disabled, run `npm run hooks:install` once. The hook checks staged source/config
+files, applies formatting and safe fixes, and stages those fixes. Unfixable lint
+errors block the commit. The configuration follows the
+[Biome Git hooks recipe](https://biomejs.dev/recipes/git-hooks/).
+
+GitHub Actions runs `biome ci .` (formatting, lint, and import ordering) on Linux
+and Windows before typechecking, tests, the build, and offline simulation.
+
 ## 🔑 Keys and enclave inference
 
 | Setting | Purpose |
