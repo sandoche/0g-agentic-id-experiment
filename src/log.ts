@@ -2,6 +2,27 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { explorers } from "./assets.js";
 import type { TradingChain } from "./types.js";
+
+const startupCodes = new Set([
+	"NODE_22_REQUIRED",
+	"AGENT_ID_REQUIRED",
+	"PAYLOAD_CHECKSUM",
+	"SEALED_RUNTIME_REQUIRED",
+	"AGENT_IDENTITY_MISMATCH",
+	"WORKER_ALREADY_RUNNING",
+	"STATE_CORRUPT",
+	"SERVER_START_FAILED",
+	"SERVICE_REGISTRATION_FAILED",
+	"SERVICE_REGISTRATION_TIMEOUT",
+	"NETWORK_ERROR",
+]);
+export function startupFailure(error: unknown): string {
+	const code = error instanceof Error ? error.message : "";
+	return startupCodes.has(code) ||
+		/^SERVICE_REGISTRATION_FAILED:\d{3}$/.test(code)
+		? `WORKER_START_FAILED: ${code}`
+		: "WORKER_START_FAILED";
+}
 export type Event = {
 	type: string;
 	time: number;

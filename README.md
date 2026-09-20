@@ -132,6 +132,17 @@ endpoint and stays in memory. Restarting requires configuration again.
 Configured attestor/RPC endpoints travel inside the encrypted capability. Dependency
 installation is marked complete only after `npm ci` succeeds for the matching lock.
 
+If activation reports `WORKER_NOT_READY` after the quote checks pass, check worker
+startup before adding funds. A running container does not imply a running worker.
+The sealed sign socket requires `POST /services` with a JSON object containing a
+`services` array; a bare array returns HTTP 400 and prevents worker startup.
+The worker process log now retains allowlisted startup error codes and registration
+HTTP status, without exposing response bodies or credentials. Worker code is part
+of the encrypted capability: rebuilding locally alone does not update an already
+minted agent.
+An inference `HTTP 402` requires credit for `AGENT_API_KEY` in 0G Private Computer;
+investment wallet balances and `topup-agent` evolution gas do not fund inference.
+
 ## 💸 Investment funding
 
 | Network | Cash token | Gas token |

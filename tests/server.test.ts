@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -8,6 +9,7 @@ import { authMessage, createAuth } from "../src/auth.js";
 import {
 	registerServices,
 	serviceDefinitions,
+	socketPost,
 	startServer,
 } from "../src/server.js";
 import type { Worker } from "../src/worker.js";
@@ -89,11 +91,9 @@ it("rejects overflow, unknown fields, and wrong signatures without echoing secre
 it("registers exact methods and loopback backends via the sign socket transport", async () => {
 	const post = vi.fn(async () => {});
 	await registerServices("/synthetic.sock", 8081, post);
-	expect(post).toHaveBeenCalledWith(
-		"/synthetic.sock",
-		"/services",
-		serviceDefinitions(8081),
-	);
+	expect(post).toHaveBeenCalledWith("/synthetic.sock", "/services", {
+		services: serviceDefinitions(8081),
+	});
 	expect(serviceDefinitions(8081).map((s) => `${s.method} ${s.path}`)).toEqual([
 		"GET /api/status",
 		"GET /api/events",
@@ -107,27 +107,64 @@ it("registers exact methods and loopback backends via the sign socket transport"
 		),
 	).toBe(true);
 });
-it.runIf(process.platform !== "win32")(
-	"registers over a real Unix socket",
-	async () => {
-		const directory = await mkdtemp(join(tmpdir(), "portfolio-socket-")),
-			socket = join(directory, "sign.sock");
-		let received = "";
-		const server = createServer((req, res) => {
-			req.on("data", (chunk) => {
-				received += String(chunk);
-			});
-			req.on("end", () => {
-				res.end("{}");
-			});
+it("registers the sealed runtime's services object over a real local socket", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "portfolio-socket-")),
+		socket =
+			process.platform === "win32"
+				? `\\\\.\\pipe\\portfolio-services-${randomUUID()}`
+				: join(directory, "sign.sock");
+	let received = "";
+	const server = createServer((req, res) => {
+		req.on("data", (chunk) => {
+			received += String(chunk);
 		});
-		await new Promise<void>((r) => server.listen(socket, r));
-		try {
-			await registerServices(socket, 8081);
-			expect(JSON.parse(received)).toEqual(serviceDefinitions(8081));
-		} finally {
-			await new Promise<void>((r) => server.close(() => r()));
-			await rm(directory, { recursive: true, force: true });
-		}
-	},
-);
+		req.on("end", () => {
+			const body = JSON.parse(received);
+			res.statusCode =
+				!Array.isArray(body) && Array.isArray(body.services) ? 200 : 400;
+			res.end("{}");
+		});
+	});
+	await new Promise<void>((r) => server.listen(socket, r));
+	try {
+		await registerServices(socket, 8081);
+		expect(JSON.parse(received)).toMatchObject({
+			services: [
+				{
+					method: "GET",
+					path: "/api/status",
+					backend: "http://127.0.0.1:8081",
+				},
+				{ method: "GET", path: "/api/events" },
+				{ method: "GET", path: "/api/challenge" },
+				{ method: "POST", path: "/api/configure" },
+				{ method: "POST", path: "/api/stop" },
+			],
+		});
+	} finally {
+		await new Promise<void>((r) => server.close(() => r()));
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+it("reports registration HTTP status without exposing the response body", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "portfolio-socket-"));
+	const socket =
+		process.platform === "win32"
+			? `\\\\.\\pipe\\portfolio-services-${randomUUID()}`
+			: join(directory, "sign.sock");
+	const server = createServer((req, res) => {
+		req.resume();
+		res.writeHead(400);
+		res.end("private upstream diagnostic");
+	});
+	await new Promise<void>((resolve) => server.listen(socket, resolve));
+	try {
+		await expect(socketPost(socket, "/services", {})).rejects.toMatchObject({
+			message: "SERVICE_REGISTRATION_FAILED:400",
+		});
+	} finally {
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+		await rm(directory, { recursive: true, force: true });
+	}
+});

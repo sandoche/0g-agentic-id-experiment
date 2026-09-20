@@ -6,7 +6,7 @@ import { createAuth } from "./auth.js";
 import { createChain } from "./chain.js";
 import { readConfig } from "./config.js";
 import { createFusionExecution } from "./fusion-execution.js";
-import { createLogger } from "./log.js";
+import { createLogger, startupFailure } from "./log.js";
 import { createMarket, type Market } from "./market.js";
 import { paperMarket } from "./paper.js";
 import { registerServices, startServer } from "./server.js";
@@ -119,7 +119,7 @@ async function main() {
 			})().catch(() => process.exit(1));
 		});
 }
-main().catch(() => {
-	console.error("WORKER_START_FAILED");
+main().catch((error) => {
+	console.error(startupFailure(error));
 	process.exit(1);
 });

@@ -152,7 +152,9 @@ export function socketPost(
 				res.on("end", () =>
 					res.statusCode && res.statusCode >= 200 && res.statusCode < 300
 						? resolve()
-						: reject(new Error("SERVICE_REGISTRATION_FAILED")),
+						: reject(
+								new Error(`SERVICE_REGISTRATION_FAILED:${res.statusCode ?? 0}`),
+							),
 				);
 			},
 		);
@@ -167,4 +169,4 @@ export const registerServices = (
 	socket: string,
 	port: number,
 	post = socketPost,
-) => post(socket, "/services", serviceDefinitions(port));
+) => post(socket, "/services", { services: serviceDefinitions(port) });

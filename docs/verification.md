@@ -10,9 +10,33 @@ idempotent deployment, proof transcript binding and offline simulation.
 The production worker bundle starts in an integration fixture and rejects a second
 worker process. Activation fixtures cover first activation, repeated activation,
 and reconstruction after reset. These fixtures are **not a deployed TEE**.
-Windows exercises an injected sign-socket transport. Linux CI additionally exercises
+Windows exercises a real named-pipe sign-socket transport. Linux CI exercises
 a real Unix socket. CI is configured for Node 22 on Windows and Linux; remote CI
 results are reported separately from local execution.
+
+## Worker service-registration repair
+
+Live diagnosis of agent `3670626` found a running container with no portfolio
+services and HTTP 404 on `/api/status`. The worker exited with
+`SERVICE_REGISTRATION_FAILED`: the runtime rejected its bare service array with
+HTTP 400 and required `{ "services": [...] }`. Registration now uses that envelope.
+Startup logs preserve allowlisted error codes and registration HTTP status while
+discarding arbitrary exception text and upstream bodies.
+
+The regression fixture rejects the old request over a real local socket and accepts
+the corrected request. Local validation: 151 tests passed with `--maxWorkers=2`,
+typecheck, build, and offline simulation passed. The initial unrestricted parallel
+test run timed out in the bundled-worker startup fixture; that test passed alone
+and in the bounded-concurrency full run. Biome passed with existing warnings; the
+1inch dependency also emits existing missing-sourcemap warnings.
+
+The existing sealed agent refused an externally authored repair script under its
+attestation policy. A subsequent request to use its supported self-update workflow
+failed with `402 Insufficient balance`; a direct private inference probe using
+`AGENT_API_KEY` independently returned HTTP 402. The last status check still found
+no ready worker. The source fix is verified locally, but repair and live activation
+of this existing deployment remain unverified. The local deployment checksum was
+not changed, and no new agent was minted.
 
 ## Read-only live checks
 
