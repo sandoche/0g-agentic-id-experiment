@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, request } from "node:http";
+import type { AgentServiceEntry } from "@0gfoundation/0g-agenticid-sdk";
 import type { createAuth, Envelope, Identity } from "./auth.js";
 import { validateConfiguration, type Worker } from "./worker.js";
 
@@ -128,9 +129,9 @@ export const serviceDefinitions = (port: number) =>
 			path: "/api/stop",
 			description: "Owner-signed worker stop",
 		},
-	].map((s) => ({
+	].map((s): AgentServiceEntry & { backend: string } => ({
 		...s,
-		input_example: {},
+		input_example: "{}",
 		backend: `http://127.0.0.1:${port}`,
 	}));
 export function socketPost(

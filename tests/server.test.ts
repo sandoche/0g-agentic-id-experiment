@@ -121,7 +121,14 @@ it("registers the sealed runtime's services object over a real local socket", as
 		req.on("end", () => {
 			const body = JSON.parse(received);
 			res.statusCode =
-				!Array.isArray(body) && Array.isArray(body.services) ? 200 : 400;
+				!Array.isArray(body) &&
+				Array.isArray(body.services) &&
+				body.services.every(
+					(service: { input_example: unknown }) =>
+						typeof service.input_example === "string",
+				)
+					? 200
+					: 400;
 			res.end("{}");
 		});
 	});
@@ -133,6 +140,7 @@ it("registers the sealed runtime's services object over a real local socket", as
 				{
 					method: "GET",
 					path: "/api/status",
+					input_example: "{}",
 					backend: "http://127.0.0.1:8081",
 				},
 				{ method: "GET", path: "/api/events" },

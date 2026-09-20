@@ -135,7 +135,9 @@ installation is marked complete only after `npm ci` succeeds for the matching lo
 If activation reports `WORKER_NOT_READY` after the quote checks pass, check worker
 startup before adding funds. A running container does not imply a running worker.
 The sealed sign socket requires `POST /services` with a JSON object containing a
-`services` array; a bare array returns HTTP 400 and prevents worker startup.
+`services` array, with each `input_example` encoded as a string (for example,
+`"{}"`). A bare array or an object-valued example returns HTTP 400 and prevents
+worker startup. The entries are checked against the SDK's service-entry type.
 The worker process log now retains allowlisted startup error codes and registration
 HTTP status, without exposing response bodies or credentials. Worker code is part
 of the encrypted capability: rebuilding locally alone does not update an already

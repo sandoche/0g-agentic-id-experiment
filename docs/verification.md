@@ -30,13 +30,33 @@ test run timed out in the bundled-worker startup fixture; that test passed alone
 and in the bounded-concurrency full run. Biome passed with existing warnings; the
 1inch dependency also emits existing missing-sourcemap warnings.
 
-The existing sealed agent refused an externally authored repair script under its
-attestation policy. A subsequent request to use its supported self-update workflow
-failed with `402 Insufficient balance`; a direct private inference probe using
-`AGENT_API_KEY` independently returned HTTP 402. The last status check still found
-no ready worker. The source fix is verified locally, but repair and live activation
-of this existing deployment remain unverified. The local deployment checksum was
-not changed, and no new agent was minted.
+After the inference account was replenished, a private inference probe succeeded
+and the agent's supported self-update workflow resumed. It reported a second HTTP
+400 cause: the Go service decoder requires `input_example` to be a string, whereas
+the worker sent an object. The installed SDK's `AgentServiceEntry` independently
+confirms this type. Registration now sends `"{}"`, and its return type is checked
+against that SDK interface. The real-socket regression fixture rejects object-valued
+examples; it failed with HTTP 400 before this fix.
+After the fix, all 151 tests passed with `--maxWorkers=2`; typecheck, production
+build, Biome checks on the changed TypeScript files, and whitespace checks passed.
+
+The deployed `/api/status` subsequently returned HTTP 200 and
+`awaiting_configuration`. Its response had a valid signature and matching request
+transcript, but an empty proof `dataHashes` array while the agent had three current
+on-chain data hashes. The application's stricter proof binding correctly rejected
+it. Live activation remains incomplete; no credentials were sent through that
+unverified response, no local deployment checksum was changed, and no new agent
+was minted.
+
+The sealed agent reported framework/configuration drift and repeated failed
+persistence uploads, with generated dependencies and worker state inside its watched
+skill directory. These runtime findings have not been independently confirmed at
+the platform layer. RPC checks did confirm that the additional 3 0G gas deposit was
+exhausted down to approximately 0.000539 0G, with 96 outgoing transactions since
+the earlier 5 0G deposit. One sampled storage submission cost approximately
+0.092895 0G in gas. Live repair attempts were stopped at the owner's request when
+additional funding became necessary; adding gas before resolving the upload loop
+could repeat the drain.
 
 ## Read-only live checks
 
