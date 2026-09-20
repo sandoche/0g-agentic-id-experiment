@@ -68,7 +68,8 @@ the bytecode check itself remains a substring check, not a full runtime fingerpr
 The clean-install CI initially caught a missing optional websocket peer in the lock.
 After regenerating that entry with npm 10, Windows and Linux Node 22 both passed
 installation, typecheck, tests, build and offline CLI simulation at `3d46809`.
-The final fix revision is rerun separately before completion.
+The final code revision `3475dc0` also passed every CI step on both operating systems:
+[GitHub Actions result](https://github.com/sandoche/0g-agent-experiment/actions/runs/35479629642).
 
 Final local verification after all eight fixes: **143 passed, 1 Linux-only test
 skipped on Windows**, strict typecheck, production build, offline CLI simulation,
