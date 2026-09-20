@@ -14,4 +14,7 @@ dependencies:
     transport: stdio
     command: codebase-memory-mcp
 includes: auto
-scripts: {}
+scripts:
+  setup: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-agent.ps1
+  rtk-check: rtk --version
+  rtk-gain: rtk gain
