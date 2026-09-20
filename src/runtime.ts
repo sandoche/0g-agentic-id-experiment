@@ -14,6 +14,7 @@ import { createFusionExecution } from './fusion-execution.js';
 import { createAuth } from './auth.js';
 import { startServer, registerServices } from './server.js';
 import type { Address } from './types.js';
+import { paperMarket } from './paper.js';
 async function main() {
   if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('NODE_22_REQUIRED');
   const id = process.argv[process.argv.indexOf('--agent-id') + 1]; if (!id || !/^\d+$/.test(id)) throw new Error('AGENT_ID_REQUIRED');
@@ -35,10 +36,7 @@ async function main() {
   const logger = createLogger('state/events.jsonl'); let worker: Worker;
   let market: Market, execution: Execution;
   if (selfTest) {
-    const tracked = assets.filter(a => config.strategy.targets.some(t => t.assetId === a.id));
-    const chains = [...new Set([config.strategy.fundingChain, ...tracked.map(a => a.chainId)])];
-    market = { preflight: async () => {}, tradable: async () => true, snapshot: async () => ({ complete: true, now: Date.now(),
-      holdings: [...tracked, ...chains.map(cashAsset)].map(asset => ({ asset, units: 0n, priceUsd: 100000000n, observedAt: Date.now() })) }) };
+    market = paperMarket(config);
     execution = { execute: async () => { throw new Error('SELF_TEST_CANNOT_SIGN'); }, reconcile: async () => 'pending' };
   } else {
     market = createMarket(config);
