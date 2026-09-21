@@ -34,25 +34,29 @@ function setup() {
 	);
 	return { worker, store, market, execute, reconcile, readOwner, cfg };
 }
-it("runs at five minutes without overlapping or signing in simulation", async () => {
-	vi.useFakeTimers();
-	const s = setup();
-	await s.worker.configure(
-		{ oneinch: "synthetic", mode: "simulation" },
-		wallet,
-	);
-	s.worker.start();
-	await vi.advanceTimersByTimeAsync(299999);
-	expect(s.market.snapshot).not.toHaveBeenCalled();
-	await vi.advanceTimersByTimeAsync(1);
-	expect(s.market.snapshot).toHaveBeenCalledTimes(1);
-	expect(s.execute).not.toHaveBeenCalled();
-	expect((await s.store.load()).paper).toBeDefined();
-	await s.worker.stop();
-	await vi.advanceTimersByTimeAsync(300000);
-	expect(s.market.snapshot).toHaveBeenCalledTimes(1);
-	vi.useRealTimers();
-});
+it.each([60000, 300000])(
+	"runs at configured %i milliseconds without signing in simulation",
+	async (intervalMs) => {
+		vi.useFakeTimers();
+		const s = setup();
+		s.cfg.strategy.intervalMs = intervalMs;
+		await s.worker.configure(
+			{ oneinch: "synthetic", mode: "simulation" },
+			wallet,
+		);
+		s.worker.start();
+		await vi.advanceTimersByTimeAsync(intervalMs - 1);
+		expect(s.market.snapshot).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(s.market.snapshot).toHaveBeenCalledTimes(1);
+		expect(s.execute).not.toHaveBeenCalled();
+		expect((await s.store.load()).paper).toBeDefined();
+		await s.worker.stop();
+		await vi.advanceTimersByTimeAsync(300000);
+		expect(s.market.snapshot).toHaveBeenCalledTimes(1);
+		vi.useRealTimers();
+	},
+);
 it("reconciles pending execution before obtaining any new snapshot", async () => {
 	const s = setup();
 	await s.worker.configure({ oneinch: "synthetic", mode: "live" }, wallet);

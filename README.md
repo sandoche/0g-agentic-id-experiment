@@ -13,7 +13,7 @@
 | Mode | Env file / `AGENT_PROFILE` | What it does | Testnet Agentic ID | Mainnet Agentic ID |
 | --- | --- | --- | --- | --- |
 | Simple | `.env.minimal` / `minimal` | Tests agent creation and native state persistence, without trading. | ✅ **424** — deployment and state updates successful | ❌ **3680055** — state updates failed |
-| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes. Simulation by default. | ⏳ Not tested yet | ❌ **3670626** — state updates failed |
+| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes by default (configurable from one to five minutes). Simulation by default. | ⏳ Not tested yet | ❌ **3670626** — state updates failed |
 
 Results as of **21 September 2026**. Deploy your own agents when following the guide.
 

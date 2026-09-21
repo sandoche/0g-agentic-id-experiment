@@ -213,7 +213,7 @@ export function createWorker(
 						state = "paused";
 						active = false;
 					});
-				}, 300000);
+				}, config.strategy.intervalMs);
 		},
 		async stop() {
 			generation++;

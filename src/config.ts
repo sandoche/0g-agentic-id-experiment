@@ -151,12 +151,12 @@ export function readConfig(env: Record<string, string | undefined>): Config {
 			fundingChain,
 			intervalMs: integer(
 				env.REBALANCE_INTERVAL_MS ?? "300000",
+				60000,
 				300000,
-				300000,
-				"INTERVAL_MUST_BE_FIVE_MINUTES",
+				"INVALID_REBALANCE_INTERVAL",
 			),
 			slippageBps: BigInt(
-				integer(env.MAX_SLIPPAGE_BPS ?? "50", 1, 500, "INVALID_SLIPPAGE"),
+				integer(env.MAX_SLIPPAGE_BPS ?? "50", 1, 1000, "INVALID_SLIPPAGE"),
 			),
 			driftBps: BigInt(
 				integer(env.DRIFT_THRESHOLD_BPS ?? "100", 1, 10000, "INVALID_DRIFT"),
