@@ -1,6 +1,6 @@
 # 0g Agentic ID Experiment
 
-> 🤖 An experiment with 0g Agentic ID for minting a portfolio-manager agent as iNFT (running with openclaw on an TEE enclave).
+🤖 An experiment with 0G Agentic ID: mint a portfolio bot as an iNFT and run it with OpenClaw inside a TEE.
 
 ## 🗯️ Bot Paperwork: wallets, chains, and agents
 
@@ -8,11 +8,46 @@
   <img src="docs/images/bot-paperwork.png" alt="Bot Paperwork: wallets, chains, and selling the robot" width="650">
 </p>
 
+## 🧪 Two modes
+
+| Mode | Env file / `AGENT_PROFILE` | What it does | Testnet Agentic ID | Mainnet Agentic ID |
+| --- | --- | --- | --- | --- |
+| Simple | `.env.minimal` / `minimal` | Tests agent creation and native state persistence, without trading. | ✅ **424** — deployment and state updates successful | ❌ **3680055** — state updates failed |
+| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes. Simulation by default. | ⏳ Not tested yet | ❌ **3670626** — state updates failed |
+
+Results as of **21 September 2026**. Deploy your own agents when following the guide.
+
+### What worked on testnet
+
+Simple agent **424** completed its initial sync and a workspace update after a test-file write request. Both updates had successful on-chain receipts and verified runtime proofs. The mainnet gas-limit error did not recur, and the runtime was stopped after the trial.
+
+**File contents and restoration are still unverified.** The native API cannot authenticate them, so the file-persistence verdict remains `INCONCLUSIVE`. See the [full testnet results](docs/minimal-testnet-result.md).
+
+### What failed on mainnet
+
+Both mainnet trials failed on state updates. Simple agent **3680055** minted successfully, but saving its initial runtime state hit `exceeds block gas limit` before any test write. Its runtime was stopped. Persistence remains unverified.
+
+> ⚠️ Adding more gas does not fix this error. The watcher can keep retrying and spending.
+> Stop the affected runtime and confirm it is stopped using the [recovery instructions](docs/minimal-persistence.md#containment-and-recovery).
+
+<details>
+<summary>🔁 Reproduce the simple mainnet failure</summary>
+
+[Deploy a new simple agent on mainnet](docs/minimal-persistence.md#operator-commands) and fund its native OG evolution gas. During initial sync, run:
+
+```bash
+npm run agent -- diagnostics --env .env.minimal --agent NEW_ID
+```
+
+Look for `exceeds block gas limit`. Replace `NEW_ID` with your new agent's ID, and follow the recovery instructions above if the update fails.
+
+</details>
+
 ## 🚀 Quick start guide
 
-Prerequisites: Node.js **22+**, Git and APM; run this Bash block from the cloned repository (existing env files are preserved).
+You need **Node.js 22+**, **Git** and **APM**. Run the commands from the cloned repository.
 
-**1. Install dependencies and try it offline.**
+### 1. Install and try it offline
 
 ```bash
 apm install --frozen
@@ -27,16 +62,44 @@ npm run agent -- check --env .env.minimal
 npm run agent -- simulate --once --env .env
 ```
 
-For PowerShell, replace the two Bash copy lines with:
+Existing env files are preserved. The last two commands run offline without keys.
+
+<details>
+<summary>Using PowerShell?</summary>
+
+Replace the two Bash copy lines with:
 
 ```powershell
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 if (!(Test-Path .env.minimal)) { Copy-Item .env.minimal.example .env.minimal }
 ```
 
-**2. Configure your mode.** The last two commands in step 1 run offline without keys. Choose `.env.minimal` (simple) or `.env` (advanced), then fill in `OWNER_PRIVATE_KEY`, a private-inference `AGENT_API_KEY`, and the intended `AGENTIC_ATTESTOR_URL`; advanced mode also needs `ONEINCH_API_KEY`, your allocations and strategy. Keep these files private.
+</details>
 
-**3. Preflight, fund and deploy.** Replace `ENV_FILE` with your chosen file and run each command separately; replace `NEW_ID` with the ID returned by deployment and `OG_AMOUNT` with your chosen deposit amount. Fund the owner wallet with native OG on the selected 0G network and add inference credit separately; mainnet deployment and top-ups spend real OG even in simulation. Read the [known persistence issue below](#-two-modes) before deploying.
+### 2. Configure your mode
+
+Open `.env.minimal` for simple mode or `.env` for advanced mode. Fill in `OWNER_PRIVATE_KEY` and a private-inference `AGENT_API_KEY`.
+
+Set `AGENTIC_ATTESTOR_URL` to choose the identity network for either mode:
+
+| Network | Attestor URL | Chain ID |
+| --- | --- | --- |
+| Testnet | `https://agenticid.0g.ai` | `16602` |
+| Mainnet | `https://agenticid-mainnet.0g.ai` | `16661` |
+
+Advanced mode also needs `ONEINCH_API_KEY`, your allocations and strategy.
+
+Keep these env files private.
+
+### 3. Preflight, fund and deploy
+
+Read the [mainnet issue](#what-failed-on-mainnet) before deploying.
+
+Fund the owner wallet with native OG on the selected 0G network. Add inference credit separately.
+
+> 💸 Mainnet deployment and top-ups spend real OG, even in simulation.
+
+Run each command separately. Replace `ENV_FILE` with your chosen env file, `NEW_ID` with the ID returned by deployment, and `OG_AMOUNT` with your chosen deposit amount.
 
 ```bash
 npm run agent -- preflight --env ENV_FILE
@@ -49,9 +112,19 @@ npm run agent -- activate --env ENV_FILE --agent NEW_ID
 npm run agent -- status --env ENV_FILE --agent NEW_ID
 ```
 
-Simple `activate` only checks runtime availability/proofs; advanced `activate` starts the portfolio worker in simulation. For simple-mode diagnostics, run `npm run agent -- diagnostics --env .env.minimal --agent NEW_ID`; if an update fails, follow [containment and recovery](docs/minimal-persistence.md#containment-and-recovery) before continuing.
+In simple mode, `activate` only checks runtime availability and proofs. In advanced mode, it starts the portfolio worker in simulation.
 
-**4. Advanced mode: fund and run live (optional).** Use your own deployed advanced agent ID in place of `NEW_ID`.
+For simple-mode diagnostics:
+
+```bash
+npm run agent -- diagnostics --env .env.minimal --agent NEW_ID
+```
+
+If a state update fails, follow [containment and recovery](docs/minimal-persistence.md#containment-and-recovery) before continuing.
+
+### 4. Run the advanced bot live (optional)
+
+Use your own deployed advanced agent ID in place of `NEW_ID`.
 
 ```bash
 npm run agent -- fund --env .env --agent NEW_ID
@@ -62,25 +135,15 @@ npm run agent -- watch --env .env --agent NEW_ID
 npm run agent -- stop --env .env --agent NEW_ID
 ```
 
-**💸 Funding:** `fund` prints the agent wallet and token contracts; send USDC and ETH on Base (default) from your wallet or exchange on that exact network, plus native gas on each trading chain (ETH on Robinhood, BNB on BNB Chain), as detailed in the [funding guide](docs/guide.md#-investment-funding).
+`fund` prints the agent wallet and token contracts. Send USDC and ETH on **Base** (the default) from your wallet or exchange, using that exact network.
 
-`stop` stops the portfolio worker, not the native runtime or its hosting costs. More details: [operator guide](docs/guide.md) · [persistence runbook](docs/minimal-persistence.md) · [verification](docs/verification.md).
+Other trading chains need their own native gas: ETH on Robinhood, BNB on BNB Chain. See the [funding guide](docs/guide.md#-investment-funding).
 
-## 🧪 Two modes
+**`stop` only stops the portfolio worker.** It does not stop the native runtime or its hosting costs.
 
-| Mode | Env file / `AGENT_PROFILE` | What it does | Deployed Agentic ID (trial) |
-| --- | --- | --- | --- |
-| Simple | `.env.minimal` / `minimal` | Tests native agent creation and state persistence, without trading. | Testnet **424** — state updates verified; runtime stopped. Mainnet **3680055** — stopped after the issue below |
-| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes; simulation by default. | Mainnet **3670626** — portfolio experiment; advanced testnet trial pending |
+## 📖 More documentation
 
-Both modes use `AGENTIC_ATTESTOR_URL` to select the identity network: `https://agenticid-mainnet.0g.ai` (mainnet, 16661) or `https://agenticid.0g.ai` (testnet, 16602).
-
-**✅ Simple mode works on 0G testnet for deployment and state updates.** On 2026-09-21, agent **424** completed initial sync and a workspace update after a test-file write request, with successful on-chain receipts and verified runtime proofs. The mainnet gas-limit error did not recur. The runtime was stopped after the trial. Specific file contents and restoration remain **unverified** because the native API cannot authenticate them; the file-persistence verdict is still `INCONCLUSIVE`. See the [testnet results](docs/minimal-testnet-result.md).
-
-> ⚠️ On 2026-09-21, the simple mainnet trial minted successfully but saving runtime state failed with `exceeds block gas limit`, before any test write; persistence remains unverified.
-> More gas funding does not fix this error: the watcher can keep retrying and spending, so stop the affected runtime and confirm it is stopped using the [recovery instructions](docs/minimal-persistence.md#containment-and-recovery).
-
-**🔁 Reproduce:** [Deploy a new simple agent on mainnet](docs/minimal-persistence.md#operator-commands), fund its native OG evolution gas, then run `npm run agent -- diagnostics --env .env.minimal --agent NEW_ID` during initial sync to look for `exceeds block gas limit`.
+[Operator guide](docs/guide.md) · [Persistence runbook](docs/minimal-persistence.md) · [Verification](docs/verification.md)
 
 ## 📄 License
 
