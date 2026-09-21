@@ -12,6 +12,12 @@
 
 ## 🧪 Two modes
 
+> [!WARNING]
+> The bot code does not currently include a function to withdraw funds back to the
+> owner. **Do not use either mode with real funds.** Funds sent to the agent wallet
+> may be unrecoverable through this bot. Use offline simulation or testnet funds
+> only.
+
 | Mode | Env file / `AGENT_PROFILE` | What it does | Testnet Agentic ID | Mainnet Agentic ID |
 | --- | --- | --- | --- | --- |
 | Simple | `.env.minimal` / `minimal` | Tests agent creation and native state persistence, without trading. | ✅ **424** — deployment and state updates successful | ❌ **3680055** — state updates failed |
