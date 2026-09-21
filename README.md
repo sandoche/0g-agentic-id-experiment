@@ -141,6 +141,65 @@ Other trading chains need their own native gas: ETH on Robinhood, BNB on BNB Cha
 
 **`stop` only stops the portfolio worker.** It does not stop the native runtime or its hosting costs.
 
+## 🧭 Portfolio deployment and activation
+
+The advanced (`portfolio-manager`) path, from your local CLI to the worker inside the sealed TEE. The owner key stays on your computer; the 1inch key is sent separately during activation.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    box Your computer
+        participant CLI as Local CLI
+    end
+    box Outside the agent TEE
+        participant AG as 0G AgenticID services
+    end
+    box Agent sealed TEE
+        participant OC as OpenClaw
+        participant W as Portfolio worker
+    end
+
+    Note over CLI,AG: DEPLOY - package the capability and create the agent
+    CLI->>CLI: Build capability from worker bundle,<br/>dependency lock and private policy
+    CLI->>AG: Preflight: network, funds and trust status
+    CLI->>CLI: Save deployment intent and idempotency key
+    CLI->>AG: Acknowledge trust components if needed
+    CLI->>AG: agent.deploy with encrypted iData,<br/>OpenClaw framework and inference credentials
+    AG-->>CLI: sealId and sealed wallet address
+    CLI->>AG: waitForMint(sealId)
+    AG-->>CLI: agentId
+    CLI->>CLI: Save agent ID in the deployment record
+    AG->>OC: Provision sealed runtime and workspace<br/>with the encrypted persona
+    CLI->>AG: waitForRunning(sealId)
+    AG-->>CLI: HTTPS runtime URL
+    Note over CLI,W: Runtime running does not mean portfolio worker ready
+
+    Note over CLI,W: ACTIVATE - bootstrap, verify and configure the worker
+    CLI->>AG: Resolve agent client, wallet and proof verifier
+    CLI->>W: Read /api/status through the sealed runtime
+    opt No verified worker status yet
+        CLI->>OC: Owner chat: run start.cjs or bootstrap from SOUL.md
+        OC->>OC: Verify and unpack into skills/portfolio/<br/>Install locked dependencies if needed
+        OC->>W: Launch worker.mjs with the agent ID
+        W->>W: Validate sealed identity and register services<br/>Wait for owner configuration
+        CLI->>W: Poll /api/status
+    end
+    W-->>CLI: Signed status response
+    CLI->>CLI: Verify proofs, agent ID and wallet<br/>Check package checksum when available
+    CLI->>W: Read /api/challenge
+    W-->>CLI: Signed one-use challenge
+    CLI->>CLI: Verify challenge and worker instance<br/>Sign configuration with the owner key
+    CLI->>W: POST /api/configure<br/>1inch key, mode, challenge and owner signature
+    W->>W: Authenticate current owner and configure<br/>Keep the API key in memory
+    W-->>CLI: Configuration accepted
+    CLI->>W: Read final /api/status
+    W-->>CLI: Signed ready status
+    CLI->>CLI: Verify final status and require ready
+    Note over W: Five-minute loop<br/>Simulation unless activated with --live
+```
+
+Follow the code: [deployment and activation](src/agent.ts) · [bootstrap](src/bootstrap.ts) · [sealed runtime](src/runtime.ts).
+
 ## 📖 More documentation
 
 [Operator guide](docs/guide.md) · [Persistence runbook](docs/minimal-persistence.md) · [Verification](docs/verification.md)
