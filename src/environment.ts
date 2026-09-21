@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import { parse } from "dotenv";
 
 const names = new Set([
+	"AGENT_PROFILE",
 	"ONEINCH_API_KEY",
 	"AGENT_API_KEY",
 	"OWNER_PRIVATE_KEY",

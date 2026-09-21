@@ -4,6 +4,83 @@ An experimental OpenClaw INFT with an encrypted portfolio policy, a deterministi
 five-minute worker, 1inch swaps/Fusion+ transfers, and signed status proofs.
 **Simulation is the default. Live trading requires `activate --live`.**
 
+`AGENT_PROFILE=portfolio-manager` preserves this behavior and is the default.
+`AGENT_PROFILE=minimal` selects an isolated native AgenticID persistence probe,
+with no portfolio payload or worker. Both use OpenClaw. The profile is not an
+agent ID and does not select a network; `AGENTIC_ATTESTOR_URL` does that separately.
+Use [.env.minimal.example](.env.minimal.example) in a separate ignored environment
+file and follow the [minimal persistence operator runbook](docs/minimal-persistence.md).
+Its confirmation currently reports INCONCLUSIVE and blocks recreation/restoration
+because the native API cannot authenticate the file-to-manifest binding or a fresh
+filesystem read. It never substitutes a chat statement for persistence proof.
+
+## Simple and advanced modes
+
+These are two profiles of the same CLI. Use the exact `AGENT_PROFILE` values below;
+`simple` and `advanced` are descriptive labels, not accepted configuration values.
+
+| Capability | Simple mode (`minimal`) | Advanced mode (`portfolio-manager`, default) |
+| --- | --- | --- |
+| Existing experiment agent ID (0G mainnet, 16661) | **3680055**; runtime stopped after the persistence failure below | **3670626**; existing portfolio agent, not operated during the simple-mode experiment |
+| Purpose | Isolate native AgenticID creation and persistence | Run the portfolio-management experiment |
+| Runtime | Native sealed OpenClaw | Native sealed OpenClaw plus a portfolio worker |
+| Application payload | 493-byte persona; no worker archive or application dependencies | Encrypted portfolio policy, worker code and dependency lock |
+| Background work | No application loop; the native persistence watcher still runs | Deterministic five-minute portfolio loop plus native persistence |
+| Configuration | Owner and private-inference credentials for creation; no portfolio settings | Portfolio allocations, strategy, investment networks and 1inch configuration |
+| Trading | None; rejects trading commands and `--live` | Simulation by default; explicit `activate --live` enables trading |
+| `activate` | Read-only native availability and proof check | Starts/configures the portfolio worker |
+| Persistence experiment | Staged baseline, one explicit Markdown write, and read-only confirmation | Portfolio state is stored under the worker's workspace |
+| Evidence limits | No authenticated file-to-manifest binding; confirmation is INCONCLUSIVE and recreate/restore are BLOCKED | Signed worker responses do not independently prove restoration of a particular file |
+| Records | Separate `minimal` profile/environment namespace | Separate `portfolio-manager` namespace; legacy records need explicit migration |
+| Costs | Sandbox hosting, inference when requested, and native storage/update gas | The same protocol costs plus application inference and live investment execution when enabled |
+
+Both profiles use the network selected by `AGENTIC_ATTESTOR_URL`. Simple mode is
+not a free sandbox: its native watcher can upload and spend OG without a portfolio
+worker. Keep `.env` unchanged and use `.env.minimal.example` as a template for a
+separate ignored file. See the [operator runbook](docs/minimal-persistence.md) for
+the commands and proof gates. The portfolio commands below describe advanced mode.
+
+## Known mainnet bug: persistence update exceeds block gas limit
+
+On **2026-09-21**, the simple profile successfully created mainnet agent
+**3680055** on **0G chain 16661**, using registry
+`0x92f66386092883f738032c472424255362a2cc6d`. Its application persona was only
+493 bytes (1,359 bytes of serialized initial iData plaintext). The existing
+portfolio agent **3670626** was not changed or operated during this experiment.
+
+The new agent initially had no evolution gas and storage uploads failed with
+`insufficient funds`. After funding, a public RPC check reported
+`12.068260796510829131 OG` in its sealed wallet, and native logs reported
+successful storage uploads. The subsequent registry update repeatedly failed:
+
+```text
+[14:41:14.552] uploader.Apply: submitting wholesale update tx (3 entries, 3 state changes)
+[14:41:15.054] drift: upload.Apply: uploader.Apply: chain.Update: send tx: exceeds block gas limit (severity=error)
+[14:41:57.483] uploader.Apply: submitting wholesale update tx (3 entries, 3 state changes)
+[14:41:57.985] drift: upload.Apply: uploader.Apply: chain.Update: send tx: exceeds block gas limit (severity=error)
+```
+
+Times above are UTC. This occurred during initial framework/configuration/workspace
+synchronization, **before any persistence-test write or paid inference request**.
+The on-chain iData remained at the initial bindings; runtime proof verification
+did not succeed. The logs are unsigned diagnostic evidence, not authenticated
+proof of file persistence. This reproduces the gas-limit symptom with the simple
+profile; it does not establish the root cause or which upstream change would fix it.
+
+**Status: unresolved. Creation succeeded; persistence did not.** More wallet
+funding does not fix a transaction exceeding the block gas limit. The native
+watcher repeated uploads, so the new runtime was explicitly stopped to prevent
+further automatic spending. The stop was subsequently confirmed with
+`phase: "stopped"` and `stopConfirmed: true`. No reset, recreation or restoration
+was attempted. Stopping preserves the minted identity; it does not refund costs.
+
+If this error occurs, stop advancing the experiment and retain diagnostics. Use
+`stop-runtime --env .env.minimal --agent NEW_ID --execute` for the affected simple
+agent, then reconcile until the stopped phase is confirmed. A CLI timeout or a
+stop-accepted response alone does not prove the remote watcher has stopped. Do not
+automatically fund, reset or retry a failed update. See
+[containment and recovery](docs/minimal-persistence.md#containment-and-recovery).
+
 ## 🚀 First run
 
 Install Node 22 or newer, then:
@@ -88,8 +165,11 @@ The SDK reads the chain, RPC and contract addresses from the selected attestor's
 `/config`; no separate 0G RPC setting is needed. Existing `.env` files with the
 testnet URL remain on testnet. Changing the URL does not migrate an existing INFT
 or its balances. Keep using its original endpoint to manage it. To deploy on the
-other network, use a separate checkout with its own `.env` and `.local` deployment
-state; agent IDs belong to their network.
+other network, select a separate environment file. Deployment records are now
+namespaced by profile, resolved protocol chain and registry, with diagnostics also
+scoped by agent ID. IDs belong to their chain/registry. Existing legacy records
+require the explicit, identity-verified local migration described in the runbook;
+the original `.local/deployment.json` remains unchanged.
 
 For mainnet, fund the owner wallet with native OG on **0G mainnet (16661)** using
 a withdrawal or transfer that supports that exact network. Faucet OG cannot fund
@@ -215,7 +295,8 @@ Actual funded transfer/clone behavior is still a credential-dependent check; see
 The sealed worker writes redacted JSONL events under its persisted skill state.
 `status` and `watch` verify the sealed response signature against the on-chain agent,
 expiry, the complete current iData set, the expected submitter, and the hash of the exact HTTP transcript. Verified response
-bytes and proof metadata are saved under ignored `.local/proofs/`.
+bytes and proof metadata are saved under ignored profile/environment/agent evidence
+directories described in the runbook (older `.local/proofs/` files are preserved).
 The first signed runtime measurement must be approved by the on-chain framework
 registry; it is then pinned under `.local/proof-bindings/`. Later image changes fail
 verification until that pin is reviewed and deliberately removed. The protocol has

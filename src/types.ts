@@ -19,13 +19,21 @@ export type Strategy = {
 	driftBps: bigint;
 	minTradeUsd: bigint;
 };
-export type Config = {
+export type AgentProfile = "minimal" | "portfolio-manager";
+export type ConnectionConfig = {
+	attestorUrl: string;
+	model: string;
+	credentials: { inference?: string; ownerKey?: Address };
+};
+export type MinimalConfig = ConnectionConfig & { profile: "minimal" };
+export type ApplicationConfig =
+	| MinimalConfig
+	| (Config & { profile: "portfolio-manager" });
+export type Config = ConnectionConfig & {
 	strategy: Strategy;
 	mode: "simulation" | "live";
 	rpcUrls: Record<TradingChain, string>;
-	attestorUrl: string;
-	model: string;
-	credentials: { oneinch?: string; inference?: string; ownerKey?: Address };
+	credentials: ConnectionConfig["credentials"] & { oneinch?: string };
 };
 export type Holding = {
 	asset: Asset;
