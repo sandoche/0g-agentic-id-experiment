@@ -20,7 +20,7 @@ it("rejects empty, subset, duplicate, stale framework and wrong submitter bindin
 		timestamp: 1n,
 		deadline: 2n,
 		taskHash: hash,
-		signature: "0x",
+		signature: `0x${"12".repeat(65)}`,
 	};
 	const expected = {
 		dataHashes: [hash, other],
@@ -53,7 +53,7 @@ it("pins only a signature-verified registry-approved framework and rechecks curr
 		timestamp: 1n,
 		deadline: 2n,
 		taskHash: hash,
-		signature: "0x",
+		signature: `0x${"12".repeat(65)}`,
 		dataHashes: [hash],
 		frameworkHash: hash,
 		submitter: "0x0000000000000000000000000000000000000000",
@@ -125,9 +125,9 @@ it("binds method, exact URI, exact response bytes, status, identity and cryptogr
 		timestamp: now,
 		deadline: now + 300n,
 		taskHash: expected,
-		dataHashes: [],
+		dataHashes: [`0x${"11".repeat(32)}`],
 		frameworkHash: `0x${"11".repeat(32)}`,
-		signature: "0x",
+		signature: `0x${"12".repeat(65)}`,
 		submitter: "0x0000000000000000000000000000000000000000",
 	};
 	await expect(

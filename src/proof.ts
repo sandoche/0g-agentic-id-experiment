@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, open, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
 	AgentClient,
@@ -17,7 +17,7 @@ import {
 } from "viem";
 import { requestJson } from "./market.js";
 import { atomicWrite, stringify } from "./state.js";
-import type { Config } from "./types.js";
+import type { ConnectionConfig } from "./types.js";
 export type ProofVerifier = (proof: ServeProof) => Promise<boolean>;
 const zero = "0x0000000000000000000000000000000000000000";
 const digest = /^0x[\da-f]{64}$/i;
@@ -50,7 +50,7 @@ export function validBindings(
 	);
 }
 export async function createProofVerifier(
-	config: Config,
+	config: ConnectionConfig,
 	ag: AgenticID,
 	agentId: bigint,
 	submitter: Address = zero,
@@ -113,13 +113,28 @@ export async function createProofVerifier(
 		// first signed, registry-approved measurement and reject later changes.
 		if (!pinned) {
 			await mkdir(directory, { recursive: true, mode: 0o700 });
-			await atomicWrite(
-				path,
-				JSON.stringify({
-					agentId: String(agentId),
-					frameworkHash: proof.frameworkHash,
-				}),
-			);
+			try {
+				const handle = await open(path, "wx", 0o600);
+				try {
+					await handle.writeFile(
+						JSON.stringify({
+							agentId: String(agentId),
+							frameworkHash: proof.frameworkHash,
+						}),
+					);
+					await handle.sync();
+				} finally {
+					await handle.close();
+				}
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+				const concurrent = JSON.parse(await readFile(path, "utf8"));
+				if (
+					concurrent.frameworkHash?.toLowerCase() !==
+					proof.frameworkHash.toLowerCase()
+				)
+					return false;
+			}
 		}
 		return true;
 	};
@@ -151,6 +166,15 @@ export async function verifyTranscript(
 	const now = BigInt(Math.floor(Date.now() / 1000));
 	if (
 		!proof ||
+		!Array.isArray(proof.dataHashes) ||
+		proof.dataHashes.length === 0 ||
+		proof.dataHashes.some(
+			(hash) => !digest.test(hash) || /^0x0+$/.test(hash),
+		) ||
+		!/^0x[\da-f]{130}$/i.test(proof.signature) ||
+		/^0x0+$/.test(proof.signature) ||
+		!digest.test(proof.frameworkHash) ||
+		/^0x0+$/.test(proof.frameworkHash) ||
 		proof.agentId !== agentId ||
 		proof.timestamp > now + 30n ||
 		proof.timestamp < now - 300n ||
@@ -171,7 +195,10 @@ export async function readProven<T>(
 ): Promise<T> {
 	if (
 		new URL(client.base).protocol !== "https:" ||
-		!/^\/api\/(status|challenge|events(?:\?after=\d+)?)$/.test(path)
+		!(
+			path === "/hello" ||
+			/^\/api\/(status|challenge|events(?:\?after=\d+)?)$/.test(path)
+		)
 	)
 		throw new Error("UNSAFE_PROOF_REQUEST");
 	const { response, proof } = await client.fetchWithProof(path, {

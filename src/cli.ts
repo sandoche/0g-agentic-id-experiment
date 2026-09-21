@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -16,16 +16,32 @@ import {
 } from "./agent.js";
 import { assets, cashAsset, chainNames } from "./assets.js";
 import { authMessage, type Challenge } from "./auth.js";
-import { readConfig } from "./config.js";
+import {
+	readApplicationConfig,
+	readConfig,
+	readConnectionConfig,
+	readProfile,
+} from "./config.js";
+import {
+	deploymentDirectory,
+	evidenceDirectory,
+	migrateLegacy,
+	requireDeployment,
+	resolveEnvironment,
+} from "./deployments.js";
 import { loadEnvironment } from "./environment.js";
 import { createLogger } from "./log.js";
 import { requestJson } from "./market.js";
+import { runMinimal } from "./minimal-cli.js";
 import { paperMarket } from "./paper.js";
 import { gasCheck, onlineCheck } from "./preflight.js";
 import { createProofVerifier, readProven, verifyTranscript } from "./proof.js";
 import { createStore, parse } from "./state.js";
 import type { Config } from "./types.js";
 import { createWorker } from "./worker.js";
+
+const joinEvidence = (...args: Parameters<typeof evidenceDirectory>) =>
+	join(evidenceDirectory(...args), "proofs");
 
 const commands = new Set([
 	"check",
@@ -43,6 +59,10 @@ const commands = new Set([
 	"preflight",
 	"retry",
 	"reset",
+	"diagnostics",
+	"persistence-test",
+	"stop-runtime",
+	"migrate-legacy",
 ]);
 const ownerCommands = new Set([
 	"deploy",
@@ -53,7 +73,19 @@ const ownerCommands = new Set([
 	"preflight",
 	"retry",
 	"reset",
+	"persistence-test",
+	"stop-runtime",
+	"migrate-legacy",
 ]);
+function needsOwner(
+	command: string,
+	values: { phase?: string; execute?: boolean },
+) {
+	return command === "persistence-test"
+		? !!values.execute &&
+				["write", "recreate", "restore"].includes(values.phase ?? "")
+		: ownerCommands.has(command);
+}
 export function argumentsFor(args: string[]) {
 	const parsed = parseArgs({
 		args,
@@ -67,6 +99,9 @@ export function argumentsFor(args: string[]) {
 			live: { type: "boolean" },
 			file: { type: "string" },
 			amount: { type: "string" },
+			execute: { type: "boolean" },
+			phase: { type: "string" },
+			timeout: { type: "string" },
 		},
 	});
 	const command = parsed.positionals[0];
@@ -74,6 +109,18 @@ export function argumentsFor(args: string[]) {
 		throw new Error("COMMAND_REQUIRED");
 	if (parsed.values.live && command !== "activate")
 		throw new Error("LIVE_FLAG_ONLY_ACTIVATE");
+	if (parsed.values.agent && command === "deploy")
+		throw new Error("DEPLOY_CANNOT_TARGET_EXISTING_AGENT");
+	if (
+		parsed.values.execute &&
+		!["persistence-test", "stop-runtime", "migrate-legacy"].includes(command)
+	)
+		throw new Error("EXECUTE_FLAG_UNSUPPORTED");
+	if (
+		(parsed.values.phase || parsed.values.timeout) &&
+		command !== "persistence-test"
+	)
+		throw new Error("PERSISTENCE_OPTIONS_UNSUPPORTED");
 	return { command, values: parsed.values };
 }
 function connectionConfig(env: Record<string, string | undefined>): Config {
@@ -145,6 +192,54 @@ export async function runCli(
 ): Promise<number> {
 	try {
 		const { command, values } = argumentsFor(args);
+		const profile = readProfile(env);
+		if (profile === "minimal") {
+			const config = readApplicationConfig({
+				...env,
+				...(!needsOwner(command, values) || command === "activate"
+					? { OWNER_PRIVATE_KEY: undefined }
+					: {}),
+			});
+			if (config.profile !== "minimal")
+				throw new Error("INVALID_AGENT_PROFILE");
+			return await runMinimal(command, values, config);
+		}
+		if (["diagnostics", "persistence-test", "stop-runtime"].includes(command))
+			throw new Error("MINIMAL_PROFILE_REQUIRED");
+		if (command === "migrate-legacy") {
+			if (!values.execute) throw new Error("EXECUTE_REQUIRED");
+			if (!values.agent || !/^[1-9]\d*$/.test(values.agent))
+				throw new Error("AGENT_ID_REQUIRED");
+			const connection = readConnectionConfig(env);
+			if (!connection.credentials.ownerKey)
+				throw new Error("OWNER_KEY_REQUIRED");
+			const environment = await resolveEnvironment(connection);
+			const ag = await AgenticID.fromAttestor(connection.attestorUrl);
+			const record = await migrateLegacy(
+				connection,
+				ag,
+				environment,
+				BigInt(values.agent),
+			);
+			console.log(
+				JSON.stringify({
+					profile,
+					environment: record.environment,
+					agentId: record.agentId,
+					migrated: true,
+					legacyPreserved: true,
+				}),
+			);
+			return 0;
+		}
+		console.log(
+			JSON.stringify({
+				profile,
+				attestor: readConnectionConfig({ ...env, OWNER_PRIVATE_KEY: undefined })
+					.attestorUrl,
+				environment: "unresolved-offline",
+			}),
+		);
 		if (command === "models") {
 			const result = await requestJson<{
 				data: {
@@ -196,6 +291,8 @@ export async function runCli(
 			const p = await deploymentPreflight(config);
 			console.log(
 				JSON.stringify({
+					profile,
+					environment: p.environment,
 					sandboxAvailableOG: formatEther(p.available),
 					sandboxMinimumOG: formatEther(p.required),
 					ownerGasOG: formatEther(p.native),
@@ -205,7 +302,7 @@ export async function runCli(
 			return 0;
 		}
 		if (command === "deploy") {
-			const result = await mintOrResume(config);
+			const result = await mintOrResume({ ...config, profile });
 			console.log(
 				JSON.stringify({ ...result, agentId: String(result.agentId) }),
 			);
@@ -219,6 +316,12 @@ export async function runCli(
 			)
 				throw new Error("EXACT_AMOUNT_REQUIRED");
 			const ag = await ownerSdk(config);
+			console.log(
+				JSON.stringify({
+					profile,
+					environment: await resolveEnvironment(config),
+				}),
+			);
 			const hash = await ag.deposit({ amountWei: parseEther(values.amount) });
 			await ag.waitForTransaction(hash);
 			console.log(`Sandbox deposit on configured 0G chain: ${hash}`);
@@ -250,6 +353,17 @@ export async function runCli(
 		const ag = ownerCommands.has(command)
 			? await ownerSdk(config)
 			: await AgenticID.fromAttestor(config.attestorUrl);
+		const environment = await resolveEnvironment(config);
+		console.log(JSON.stringify({ profile, environment }));
+		await requireDeployment(
+			config,
+			profile,
+			ag,
+			environment,
+			agentId,
+			ownerCommands.has(command),
+		);
+		const proofsDirectory = joinEvidence(profile, environment, String(agentId));
 		const wallet = await ag.agent.getAgentSeal(agentId);
 		if (command === "fund") {
 			console.log(`Agent wallet: ${wallet}`);
@@ -301,12 +415,18 @@ export async function runCli(
 					throw new Error("SOME_ROUTES_UNAVAILABLE");
 				await gasCheck(config, wallet);
 			}
-			const saved = await loadDeployment(),
+			const saved = await loadDeployment(
+					deploymentDirectory(profile, environment),
+				),
 				checksum =
 					saved?.agentId === String(agentId)
 						? (saved.checksum as string)
 						: undefined;
-			console.log(JSON.stringify(await activate(config, agentId, checksum)));
+			console.log(
+				JSON.stringify(
+					await activate(config, agentId, checksum, proofsDirectory),
+				),
+			);
 			return 0;
 		}
 		const client = await ag.agent.client(agentId);
@@ -364,7 +484,7 @@ export async function runCli(
 					agentId,
 					path,
 					verify,
-					".local/proofs",
+					proofsDirectory,
 				);
 				console.log(JSON.stringify(result));
 				if (result.events?.length)
@@ -378,7 +498,7 @@ export async function runCli(
 			process.removeListener("SIGINT", stop);
 			process.removeListener("SIGTERM", stop);
 		}
-		console.log(`Proof files: ${resolve(".local/proofs")}`);
+		console.log(`Proof files: ${resolve(proofsDirectory)}`);
 		return 0;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "";
@@ -402,7 +522,7 @@ if (
 			args,
 			await loadEnvironment(
 				p.values.env ?? ".env",
-				ownerCommands.has(p.command),
+				needsOwner(p.command, p.values),
 			),
 		);
 	} catch {

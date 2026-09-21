@@ -1,15 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { AgenticID } from "@0gfoundation/0g-agenticid-sdk";
 import { privateKeyToAccount } from "viem/accounts";
 import { authMessage, type Challenge } from "./auth.js";
-import { buildCapability } from "./bootstrap.js";
+import { buildCapability, sha256 } from "./bootstrap.js";
+import {
+	type DeploymentRecord,
+	deploymentDirectory,
+	readRecord,
+	requireDeployment,
+	resolveEnvironment,
+	withOperationLock,
+} from "./deployments.js";
 import { requestJson } from "./market.js";
+import { minimalCapability } from "./minimal.js";
 import { createProofVerifier, readProven } from "./proof.js";
 import { atomicWrite } from "./state.js";
-import type { Config } from "./types.js";
+import type { ApplicationConfig, Config, ConnectionConfig } from "./types.js";
 export function openclawConfig(model: string) {
 	return {
 		agents: { defaults: { model: { primary: `openai/${model}` } } },
@@ -122,16 +131,12 @@ export async function loadDeployment(
 		throw new Error("DEPLOYMENT_STATE_CORRUPT");
 	}
 }
-export async function deploymentPreflight(config: Config) {
+export async function deploymentPreflight(config: ConnectionConfig) {
 	if (!config.credentials.ownerKey) throw new Error("OWNER_KEY_REQUIRED");
-	if (!config.credentials.inference) throw new Error("INFERENCE_KEY_REQUIRED");
-	const environment = await requestJson<{
-		chain_id: number;
-		frameworks: { name: string; image: string }[];
-	}>(new URL(`${config.attestorUrl}/config`));
+	const environment = await resolveEnvironment(config);
 	if (
-		![16602, 16661].includes(environment.chain_id) ||
-		!environment.frameworks.some((f) => f.name === "openclaw" && f.image)
+		![16602, 16661].includes(environment.chainId) ||
+		!environment.openclawSupported
 	)
 		throw new Error("UNSUPPORTED_SEALED_ENVIRONMENT");
 	const ag = await AgenticID.fromAttestor(config.attestorUrl, {
@@ -143,6 +148,7 @@ export async function deploymentPreflight(config: Config) {
 		acknowledgments = await ag.ackStatus();
 	const required = costs.pricing.createFee + costs.costPerMinWei * 30n;
 	return {
+		environment,
 		ag,
 		costs,
 		available: balance.availableWei,
@@ -152,92 +158,159 @@ export async function deploymentPreflight(config: Config) {
 	};
 }
 export async function mintOrResume(
-	config: Config,
+	config: ApplicationConfig,
 	directory = ".local",
 	log: (message: string) => void = console.log,
 ) {
+	const capability = await applicationCapability(config);
+	const iData = [
+		{
+			role: "framework",
+			plaintext: { name: "openclaw", schema_version: 1 },
+			extra: {},
+		},
+		{
+			role: "openclaw.json",
+			plaintext: openclawConfig(config.model),
+			extra: {},
+		},
+		{
+			role: "persona",
+			plaintext: {
+				system_prompt: capability.systemPrompt,
+				inference: { provider: "openai", model: config.model },
+			},
+			extra: {},
+		},
+	];
+	const payloadChecksum = sha256(JSON.stringify(iData));
+	await checkModel(config.model, capability.bytes);
+	const { ag, available, required, native, acknowledgments, environment } =
+		await deploymentPreflight(config);
+	log(
+		JSON.stringify({
+			profile: config.profile,
+			environment,
+			payloadBytes: capability.bytes,
+			iDataPlaintextBytes: Buffer.byteLength(JSON.stringify(iData)),
+		}),
+	);
+	const namespace = deploymentDirectory(config.profile, environment, directory);
+	return withOperationLock(namespace, async () => {
+		const previous = await readRecord(config.profile, environment, directory);
+		if (!previous?.sealId && !config.credentials.inference)
+			throw new Error("INFERENCE_KEY_REQUIRED");
+		const owner = privateKeyToAccount(config.credentials.ownerKey!).address;
+		if (previous && previous.owner.toLowerCase() !== owner.toLowerCase())
+			throw new Error("OWNER_IDENTITY_MISMATCH");
+		if (previous?.agentId)
+			await requireDeployment(
+				config,
+				config.profile,
+				ag,
+				environment,
+				BigInt(previous.agentId),
+				true,
+				directory,
+			);
+		if (previous?.checksum && previous.checksum !== capability.sha256)
+			throw new Error("DEPLOYMENT_PAYLOAD_CHANGED");
+		if (previous && previous.payloadChecksum !== payloadChecksum)
+			throw new Error("DEPLOYMENT_PAYLOAD_CHANGED");
+		if (!previous?.sealId && available < required)
+			throw new Error(`SANDBOX_FUNDING_REQUIRED:${required - available}`);
+		if (!previous?.sealId && native === 0n)
+			throw new Error("OWNER_0G_GAS_REQUIRED");
+		const intent: DeploymentRecord = previous ?? {
+			version: 1,
+			profile: config.profile,
+			environment: {
+				chainId: environment.chainId,
+				registry: environment.registry,
+			},
+			owner,
+			checksum: capability.sha256,
+			payloadChecksum,
+			idempotencyKey: randomUUID(),
+		};
+		const persist = (s: Record<string, unknown>) =>
+			atomicWrite(
+				join(namespace, "deployment.json"),
+				JSON.stringify({ ...s, checksum: capability.sha256 }),
+			);
+		await persist(intent);
+		if (!previous?.sealId && !acknowledgments.allAcked) {
+			const hash = await ag.ack();
+			if (hash) await ag.waitForTransaction(hash);
+		}
+		const state = await deployOnce(intent, persist, (key) =>
+			ag.agent.deploy({
+				name:
+					config.profile === "minimal"
+						? "AgenticID minimal persistence probe"
+						: "Portfolio experiment",
+				description:
+					config.profile === "minimal"
+						? "Native persistence experiment"
+						: "Sealed multi-chain portfolio worker",
+				framework: "openclaw",
+				idempotencyKey: key,
+				iData,
+				sandbox: { apiKey: config.credentials.inference! },
+			}),
+		);
+		const sealId = state.sealId as `0x${string}`;
+		log(`Deployment accepted: ${sealId}`);
+		const agentId = await ag.agent.waitForMint(sealId, {
+			timeoutMs: 300000,
+			pollIntervalMs: 5000,
+		});
+		state.agentId = String(agentId);
+		await persist(state);
+		await requireDeployment(
+			config,
+			config.profile,
+			ag,
+			environment,
+			agentId,
+			true,
+			directory,
+		);
+		const running = await ag.agent.waitForRunning(sealId, {
+			timeoutMs: 300000,
+			pollIntervalMs: 5000,
+		});
+		if (new URL(running.url).protocol !== "https:")
+			throw new Error("HTTPS_REQUIRED");
+		state.url = running.url;
+		await persist(state);
+		log(
+			config.profile === "minimal"
+				? "Runtime available; persistence unverified."
+				: "Container running; worker activation still required.",
+		);
+		return {
+			agentId,
+			sealId,
+			url: running.url,
+			checksum: capability.sha256,
+			payloadBytes: capability.bytes,
+			wallet: state.agentSealAddr as `0x${string}`,
+		};
+	});
+}
+export async function applicationCapability(config: ApplicationConfig) {
+	if (config.profile === "minimal") return minimalCapability();
 	const files: Record<string, string> = {};
 	for (const name of ["worker.mjs", "package.json", "package-lock.json"])
 		files[name] = await readFile(join("dist", name), "utf8");
-	const capability = buildCapability(config.strategy, files, config);
-	await checkModel(config.model, capability.bytes);
-	const { ag, available, required, native, acknowledgments } =
-		await deploymentPreflight(config);
-	if (available < required)
-		throw new Error(`SANDBOX_FUNDING_REQUIRED:${required - available}`);
-	if (native === 0n) throw new Error("OWNER_0G_GAS_REQUIRED");
-	await mkdir(directory, { recursive: true, mode: 0o700 });
-	const previous = await loadDeployment(directory);
-	if (previous?.checksum && previous.checksum !== capability.sha256)
-		throw new Error("DEPLOYMENT_PAYLOAD_CHANGED");
-	const persist = (s: Record<string, unknown>) =>
-		atomicWrite(
-			join(directory, "deployment.json"),
-			JSON.stringify({ ...s, checksum: capability.sha256 }),
-		);
-	if (!acknowledgments.allAcked) {
-		const hash = await ag.ack();
-		if (hash) await ag.waitForTransaction(hash);
-	}
-	const state = await deployOnce(previous, persist, (key) =>
-		ag.agent.deploy({
-			name: "Portfolio experiment",
-			description: "Sealed multi-chain portfolio worker",
-			framework: "openclaw",
-			idempotencyKey: key,
-			iData: [
-				{
-					role: "framework",
-					plaintext: { name: "openclaw", schema_version: 1 },
-					extra: {},
-				},
-				{
-					role: "openclaw.json",
-					plaintext: openclawConfig(config.model),
-					extra: {},
-				},
-				{
-					role: "persona",
-					plaintext: {
-						system_prompt: capability.systemPrompt,
-						inference: { provider: "openai", model: config.model },
-					},
-					extra: {},
-				},
-			],
-			sandbox: { apiKey: config.credentials.inference! },
-		}),
-	);
-	const sealId = state.sealId as `0x${string}`;
-	log(`Deployment accepted: ${sealId}`);
-	const agentId = await ag.agent.waitForMint(sealId, {
-		timeoutMs: 300000,
-		pollIntervalMs: 5000,
-	});
-	state.agentId = agentId.toString();
-	await persist(state);
-	log(`Agent minted: ${agentId}`);
-	const running = await ag.agent.waitForRunning(sealId, {
-		timeoutMs: 300000,
-		pollIntervalMs: 5000,
-	});
-	if (new URL(running.url).protocol !== "https:")
-		throw new Error("HTTPS_REQUIRED");
-	state.url = running.url;
-	await persist(state);
-	log("Container running; worker activation still required.");
-	return {
-		agentId,
-		sealId,
-		url: running.url,
-		checksum: capability.sha256,
-		wallet: state.agentSealAddr as `0x${string}`,
-	};
+	return buildCapability(config.strategy, files, config);
 }
 export async function activate(
 	config: Config,
 	agentId: bigint,
 	checksum?: string,
+	proofsDirectory = ".local/proofs",
 ) {
 	if (!config.credentials.ownerKey || !config.credentials.oneinch)
 		throw new Error("ACTIVATION_CREDENTIALS_REQUIRED");
@@ -268,7 +341,7 @@ export async function activate(
 			agentId,
 			"/api/status",
 			verify,
-			".local/proofs",
+			proofsDirectory,
 		);
 		if (
 			s.agentId !== String(agentId) ||

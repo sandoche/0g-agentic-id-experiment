@@ -51,9 +51,9 @@ it("activates once, verifies readiness, then configures keys outside chat on bot
 					timestamp: now,
 					deadline: now + 60n,
 					taskHash: taskHash("GET", path, new Uint8Array(), bytes, 200),
-					dataHashes: [],
-					frameworkHash: "0x",
-					signature: "0x",
+					dataHashes: [`0x${"11".repeat(32)}`],
+					frameworkHash: `0x${"11".repeat(32)}`,
+					signature: `0x${"12".repeat(65)}`,
 				},
 			};
 		},

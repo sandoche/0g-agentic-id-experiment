@@ -1,5 +1,49 @@
 import { assets } from "./assets.js";
-import type { Address, Config, Target, TradingChain } from "./types.js";
+import type {
+	Address,
+	AgentProfile,
+	ApplicationConfig,
+	Config,
+	ConnectionConfig,
+	Target,
+	TradingChain,
+} from "./types.js";
+
+export function readProfile(
+	env: Record<string, string | undefined>,
+): AgentProfile {
+	const profile = env.AGENT_PROFILE ?? "portfolio-manager";
+	if (profile !== "minimal" && profile !== "portfolio-manager")
+		throw new Error("INVALID_AGENT_PROFILE");
+	return profile;
+}
+export function readConnectionConfig(
+	env: Record<string, string | undefined>,
+): ConnectionConfig {
+	if (env.AGENTIC_ATTESTOR_URL && new URL(env.AGENTIC_ATTESTOR_URL).search)
+		throw new Error("ATTESTOR_QUERY_NOT_ALLOWED");
+	const ownerKey = env.OWNER_PRIVATE_KEY?.trim() || undefined;
+	if (ownerKey && !/^0x[0-9a-fA-F]{64}$/.test(ownerKey))
+		throw new Error("INVALID_OWNER_KEY");
+	return {
+		attestorUrl: url(
+			env.AGENTIC_ATTESTOR_URL || "https://agenticid-mainnet.0g.ai",
+		),
+		model: env.INFERENCE_MODEL?.trim() || "glm-5.3",
+		credentials: {
+			ownerKey: ownerKey as Address | undefined,
+			inference: env.AGENT_API_KEY?.trim() || undefined,
+		},
+	};
+}
+export function readApplicationConfig(
+	env: Record<string, string | undefined>,
+): ApplicationConfig {
+	const profile = readProfile(env);
+	return profile === "minimal"
+		? { ...readConnectionConfig(env), profile }
+		: { ...readConfig(env), profile };
+}
 
 export function requireTradingChain(chainId: number): TradingChain {
 	if (![56, 4663, 8453, 42161].includes(chainId))

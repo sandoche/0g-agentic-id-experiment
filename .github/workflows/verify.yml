@@ -21,3 +21,4 @@ jobs:
       - run: npm test -- --run
       - run: npm run build
       - run: npm run agent -- simulate --once --env .env.example
+      - run: npm run agent -- check --env .env.minimal.example
