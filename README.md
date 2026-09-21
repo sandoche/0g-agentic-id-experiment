@@ -84,4 +84,6 @@ Both modes use `AGENTIC_ATTESTOR_URL` to select the identity network: `https://a
 
 ## 📄 License
 
-[MIT](LICENSE) © 2026 Sandoche. Bundled skills retain their [third-party licenses](THIRD-PARTY-LICENSES/).
+[MIT](LICENSE) © 2026 Sandoche.
+
+Bundled skills retain their [third-party licenses](THIRD-PARTY-LICENSES/).
