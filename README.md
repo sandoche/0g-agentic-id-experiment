@@ -2,7 +2,11 @@
 
 🤖 An experiment with on-chain agent identities and OpenClaw in a secure runtime: test whether an agent can save its state, or try a portfolio bot with an encrypted strategy and its own wallet.
 
-![Bot Paperwork: wallets, chains, and selling the robot](docs/images/bot-paperwork.png)
+## 🗯️ Bot Paperwork: wallets, chains, and agents
+
+<p align="center">
+  <img src="docs/images/bot-paperwork.png" alt="Bot Paperwork: wallets, chains, and selling the robot" width="650">
+</p>
 
 ## 🧪 Two modes
 
@@ -20,13 +24,13 @@ Both modes use `AGENTIC_ATTESTOR_URL` to select the identity network: `https://a
 
 ## 🚀 Quick setup
 
-Prerequisites: Node.js **22+**, Git and APM; run this PowerShell block from the cloned repository (existing env files are preserved).
+Prerequisites: Node.js **22+**, Git and APM; run this Bash block from the cloned repository (existing env files are preserved).
 
-```powershell
+```bash
 apm install --frozen
 npm ci
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
-if (!(Test-Path .env.minimal)) { Copy-Item .env.minimal.example .env.minimal }
+if [ ! -e .env ]; then cp .env.example .env; fi
+if [ ! -e .env.minimal ]; then cp .env.minimal.example .env.minimal; fi
 npm run check
 npm run typecheck
 npm test -- --run
