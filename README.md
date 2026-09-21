@@ -15,7 +15,7 @@
 | Mode | Env file / `AGENT_PROFILE` | What it does | Testnet Agentic ID | Mainnet Agentic ID |
 | --- | --- | --- | --- | --- |
 | Simple | `.env.minimal` / `minimal` | Tests agent creation and native state persistence, without trading. | ✅ **424** — deployment and state updates successful | ❌ **3680055** — state updates failed |
-| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes by default (configurable from one to five minutes). Simulation by default. | ⏳ Not tested yet | ❌ **3670626** — state updates failed |
+| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes by default (configurable from one to five minutes). Simulation by default. | 🟡 **425** — works (partially tested) | ❌ **3670626** — state updates failed |
 
 Results as of **21 September 2026**. Deploy your own agents when following the guide.
 
@@ -24,6 +24,10 @@ Results as of **21 September 2026**. Deploy your own agents when following the g
 Simple agent **424** completed its initial sync and a workspace update after a test-file write request. Both updates had successful on-chain receipts and verified runtime proofs. The mainnet gas-limit error did not recur, and the runtime was stopped after the trial.
 
 **File contents and restoration are still unverified.** The native API cannot authenticate them, so the file-persistence verdict remains `INCONCLUSIVE`. See the [full testnet results](docs/minimal-testnet-result.md).
+
+Advanced agent **425** ran successfully with **0G testnet hosting**: deployment, verified runtime proofs, live activation, quote checks, and a confirmed USDC approval on Base all worked. Investment activity used real funds on Base and Robinhood Chain.
+
+**The trading flow is partially tested:** the bridge order was rejected by the slippage guard, so no completed bridge or stock purchase was verified. The runtime was stopped after the trial.
 
 ### What failed on mainnet
 
