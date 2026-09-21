@@ -2,7 +2,7 @@
 
 🤖 An experiment with 0G Agentic ID: mint a portfolio bot as an iNFT and run it with OpenClaw inside a TEE.
 
-👉 **[Take the interactive code tour](https://0g.san.cx/)** — portfolio manager and persistence probe, with highlighted code, keyboard navigation and autoplay. Source snapshot: `44c0216`.
+👉 **[Take the interactive code tour](https://doc0g.san.cx/)** — portfolio manager and persistence probe, with highlighted code, keyboard navigation and autoplay. Source snapshot: `44c0216`.
 
 ## 🗯️ Bot Paperwork: wallets, chains, and agents
 
