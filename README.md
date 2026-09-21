@@ -16,6 +16,12 @@ filesystem read. It never substitutes a chat statement for persistence proof.
 
 ## Simple and advanced modes
 
+> [!WARNING]
+> The bot code does not currently include a function to withdraw funds back to the
+> owner. **Do not use either mode with real funds.** Funds sent to the agent wallet
+> may be unrecoverable through this bot. Use offline simulation or testnet funds
+> only.
+
 These are two profiles of the same CLI. Use the exact `AGENT_PROFILE` values below;
 `simple` and `advanced` are descriptive labels, not accepted configuration values.
 
