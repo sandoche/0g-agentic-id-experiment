@@ -49,7 +49,7 @@ export function validateSwap(
 		action.amount <= 0n ||
 		quote <= 0n ||
 		slippage < 1n ||
-		slippage > 500n
+		slippage > 1000n
 	)
 		throw new Error("INVALID_SWAP");
 	const tx = response.tx;

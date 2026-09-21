@@ -1,20 +1,16 @@
-# 0g Agent Experiment
+# 0g Agentic ID Experiment
 
-An experimental OpenClaw INFT with an encrypted portfolio policy, a deterministic
-five-minute worker, 1inch swaps/Fusion+ transfers, and signed status proofs.
-**Simulation is the default. Live trading requires `activate --live`.**
+🤖 An experiment with 0G Agentic ID: mint a portfolio bot as an iNFT and run it with OpenClaw inside a TEE.
 
-`AGENT_PROFILE=portfolio-manager` preserves this behavior and is the default.
-`AGENT_PROFILE=minimal` selects an isolated native AgenticID persistence probe,
-with no portfolio payload or worker. Both use OpenClaw. The profile is not an
-agent ID and does not select a network; `AGENTIC_ATTESTOR_URL` does that separately.
-Use [.env.minimal.example](.env.minimal.example) in a separate ignored environment
-file and follow the [minimal persistence operator runbook](docs/minimal-persistence.md).
-Its confirmation currently reports INCONCLUSIVE and blocks recreation/restoration
-because the native API cannot authenticate the file-to-manifest binding or a fresh
-filesystem read. It never substitutes a chat statement for persistence proof.
+👉 **[Take the interactive code tour](https://doc0g.san.cx/)** — portfolio manager and persistence probe, with highlighted code, keyboard navigation and autoplay. Source snapshot: `44c0216`.
 
-## Simple and advanced modes
+## 🗯️ Bot Paperwork: wallets, chains, and agents
+
+<p align="center">
+  <img src="docs/images/bot-paperwork.png" alt="Bot Paperwork: wallets, chains, and selling the robot" width="650">
+</p>
+
+## 🧪 Two modes
 
 > [!WARNING]
 > The bot code does not currently include a function to withdraw funds back to the
@@ -22,406 +18,206 @@ filesystem read. It never substitutes a chat statement for persistence proof.
 > may be unrecoverable through this bot. Use offline simulation or testnet funds
 > only.
 
-These are two profiles of the same CLI. Use the exact `AGENT_PROFILE` values below;
-`simple` and `advanced` are descriptive labels, not accepted configuration values.
+| Mode | Env file / `AGENT_PROFILE` | What it does | Testnet Agentic ID | Mainnet Agentic ID |
+| --- | --- | --- | --- | --- |
+| Simple | `.env.minimal` / `minimal` | Tests agent creation and native state persistence, without trading. | ✅ **424** — deployment and state updates successful | ❌ **3680055** — state updates failed |
+| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes by default (configurable from one to five minutes). Simulation by default. | 🟡 **425** — works (partially tested) | ❌ **3670626** — state updates failed |
 
-| Capability | Simple mode (`minimal`) | Advanced mode (`portfolio-manager`, default) |
-| --- | --- | --- |
-| Existing experiment agent ID (0G mainnet, 16661) | **3680055**; runtime stopped after the persistence failure below | **3670626**; existing portfolio agent, not operated during the simple-mode experiment |
-| Purpose | Isolate native AgenticID creation and persistence | Run the portfolio-management experiment |
-| Runtime | Native sealed OpenClaw | Native sealed OpenClaw plus a portfolio worker |
-| Application payload | 493-byte persona; no worker archive or application dependencies | Encrypted portfolio policy, worker code and dependency lock |
-| Background work | No application loop; the native persistence watcher still runs | Deterministic five-minute portfolio loop plus native persistence |
-| Configuration | Owner and private-inference credentials for creation; no portfolio settings | Portfolio allocations, strategy, investment networks and 1inch configuration |
-| Trading | None; rejects trading commands and `--live` | Simulation by default; explicit `activate --live` enables trading |
-| `activate` | Read-only native availability and proof check | Starts/configures the portfolio worker |
-| Persistence experiment | Staged baseline, one explicit Markdown write, and read-only confirmation | Portfolio state is stored under the worker's workspace |
-| Evidence limits | No authenticated file-to-manifest binding; confirmation is INCONCLUSIVE and recreate/restore are BLOCKED | Signed worker responses do not independently prove restoration of a particular file |
-| Records | Separate `minimal` profile/environment namespace | Separate `portfolio-manager` namespace; legacy records need explicit migration |
-| Costs | Sandbox hosting, inference when requested, and native storage/update gas | The same protocol costs plus application inference and live investment execution when enabled |
+Results as of **21 September 2026**. Deploy your own agents when following the guide.
 
-Both profiles use the network selected by `AGENTIC_ATTESTOR_URL`. Simple mode is
-not a free sandbox: its native watcher can upload and spend OG without a portfolio
-worker. Keep `.env` unchanged and use `.env.minimal.example` as a template for a
-separate ignored file. See the [operator runbook](docs/minimal-persistence.md) for
-the commands and proof gates. The portfolio commands below describe advanced mode.
+### What worked on testnet
 
-## Known mainnet bug: persistence update exceeds block gas limit
+Simple agent **424** completed its initial sync and a workspace update after a test-file write request. Both updates had successful on-chain receipts and verified runtime proofs. The mainnet gas-limit error did not recur, and the runtime was stopped after the trial.
 
-On **2026-09-21**, the simple profile successfully created mainnet agent
-**3680055** on **0G chain 16661**, using registry
-`0x92f66386092883f738032c472424255362a2cc6d`. Its application persona was only
-493 bytes (1,359 bytes of serialized initial iData plaintext). The existing
-portfolio agent **3670626** was not changed or operated during this experiment.
+**File contents and restoration are still unverified.** The native API cannot authenticate them, so the file-persistence verdict remains `INCONCLUSIVE`. See the [full testnet results](docs/minimal-testnet-result.md).
 
-The new agent initially had no evolution gas and storage uploads failed with
-`insufficient funds`. After funding, a public RPC check reported
-`12.068260796510829131 OG` in its sealed wallet, and native logs reported
-successful storage uploads. The subsequent registry update repeatedly failed:
+Advanced agent **425** ran successfully with **0G testnet hosting**: deployment, verified runtime proofs, live activation, quote checks, and a confirmed USDC approval on Base all worked. Investment activity used real funds on Base and Robinhood Chain.
 
-```text
-[14:41:14.552] uploader.Apply: submitting wholesale update tx (3 entries, 3 state changes)
-[14:41:15.054] drift: upload.Apply: uploader.Apply: chain.Update: send tx: exceeds block gas limit (severity=error)
-[14:41:57.483] uploader.Apply: submitting wholesale update tx (3 entries, 3 state changes)
-[14:41:57.985] drift: upload.Apply: uploader.Apply: chain.Update: send tx: exceeds block gas limit (severity=error)
+**The trading flow is partially tested:** the bridge order was rejected by the slippage guard, so no completed bridge or stock purchase was verified. The runtime was stopped after the trial.
+
+### What failed on mainnet
+
+Both mainnet trials failed on state updates. Simple agent **3680055** minted successfully, but saving its initial runtime state hit `exceeds block gas limit` before any test write. Its runtime was stopped. Persistence remains unverified.
+
+> ⚠️ Adding more gas does not fix this error. The watcher can keep retrying and spending.
+> Stop the affected runtime and confirm it is stopped using the [recovery instructions](docs/minimal-persistence.md#containment-and-recovery).
+
+<details>
+<summary>🔁 Reproduce the simple mainnet failure</summary>
+
+[Deploy a new simple agent on mainnet](docs/minimal-persistence.md#operator-commands) and fund its native OG evolution gas. During initial sync, run:
+
+```bash
+npm run agent -- diagnostics --env .env.minimal --agent NEW_ID
 ```
 
-Times above are UTC. This occurred during initial framework/configuration/workspace
-synchronization, **before any persistence-test write or paid inference request**.
-The on-chain iData remained at the initial bindings; runtime proof verification
-did not succeed. The logs are unsigned diagnostic evidence, not authenticated
-proof of file persistence. This reproduces the gas-limit symptom with the simple
-profile; it does not establish the root cause or which upstream change would fix it.
+Look for `exceeds block gas limit`. Replace `NEW_ID` with your new agent's ID, and follow the recovery instructions above if the update fails.
 
-**Status: unresolved. Creation succeeded; persistence did not.** More wallet
-funding does not fix a transaction exceeding the block gas limit. The native
-watcher repeated uploads, so the new runtime was explicitly stopped to prevent
-further automatic spending. The stop was subsequently confirmed with
-`phase: "stopped"` and `stopConfirmed: true`. No reset, recreation or restoration
-was attempted. Stopping preserves the minted identity; it does not refund costs.
+</details>
 
-If this error occurs, stop advancing the experiment and retain diagnostics. Use
-`stop-runtime --env .env.minimal --agent NEW_ID --execute` for the affected simple
-agent, then reconcile until the stopped phase is confirmed. A CLI timeout or a
-stop-accepted response alone does not prove the remote watcher has stopped. Do not
-automatically fund, reset or retry a failed update. See
-[containment and recovery](docs/minimal-persistence.md#containment-and-recovery).
+## 🚀 Quick start guide
 
-## 🚀 First run
+You need **Node.js 22+**, **Git** and **APM**. Run the commands from the cloned repository.
 
-Install Node 22 or newer, then:
+### 1. Install and try it offline
 
-```powershell
+```bash
+apm install --frozen
 npm ci
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
+if [ ! -e .env ]; then cp .env.example .env; fi
+if [ ! -e .env.minimal ]; then cp .env.minimal.example .env.minimal; fi
+npm run check
 npm run typecheck
 npm test -- --run
 npm run build
-npm run agent -- check
-npm run agent -- simulate --once
+npm run agent -- check --env .env.minimal
+npm run agent -- simulate --once --env .env
 ```
 
-Keep your existing `.env`. The example contains demonstration weights and a sample
-prompt. Put your own `PORTFOLIO_ALLOCATIONS` and `STRATEGY_PROMPT` in `.env`;
-weights use basis points and must total 10000. Never commit this file.
-Quoted multiline prompts and allocation JSON are supported; unclosed values fail.
-Offline simulation uses synthetic $1 token prices, a paper ledger, and no API keys
-or signatures. An empty paper account starts with 1000 funding-chain stablecoins.
-Without `--once`, it repeats every five minutes until Ctrl+C.
+Existing env files are preserved. The last two commands run offline without keys.
 
-## Development checks
+<details>
+<summary>Using PowerShell?</summary>
 
-Biome uses its default formatter and recommended lint rules for the TypeScript
-source, tests, build scripts, and root configuration. Generated output, the npm
-lockfile, and downloaded APM skills are excluded.
-
-```sh
-npm run check        # Check formatting, lint, and import ordering
-npm run check:fix    # Apply formatting and safe fixes
-npm run lint         # Lint only
-npm run format      # Format files
-npm run format:check # Check formatting without writing
-```
-
-`npm ci` installs Lefthook's pre-commit hook automatically. If install scripts were
-disabled, run `npm run hooks:install` once. The hook checks staged source/config
-files, applies formatting and safe fixes, and stages those fixes. Unfixable lint
-errors block the commit. The configuration follows the
-[Biome Git hooks recipe](https://biomejs.dev/recipes/git-hooks/).
-
-GitHub Actions runs `biome ci .` (formatting, lint, and import ordering) on Linux
-and Windows before typechecking, tests, the build, and offline simulation.
-
-## 🔑 Keys and enclave inference
-
-| Setting | Purpose |
-| --- | --- |
-| `ONEINCH_API_KEY` | [1inch Business](https://business.1inch.com/portal/) quotes, prices and order API |
-| `AGENT_API_KEY` | [0G Private Computer](https://pc.0g.ai/dashboard/api-keys) inference key; choose **Private** trust mode |
-| `INFERENCE_MODEL` | `glm-5.3`, checked for TeeML attestation and tool calling |
-| `OWNER_PRIVATE_KEY` | Local INFT owner wallet, used only by explicit owner commands |
-
-The first OpenClaw inference pins `X-0G-Provider-Trust-Mode: private`; there is no
-Verified/Standard fallback. The API dialect is named `openai`, with its endpoint
-fixed to the 0G router so the sealed adapter preserves the privacy header.
-Read [0G's privacy modes](https://docs.0g.ai/developer-hub/building-on-0g/compute-network/router/privacy).
+Replace the two Bash copy lines with:
 
 ```powershell
-npm run agent -- models
-npm run agent -- check --online
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+if (!(Test-Path .env.minimal)) { Copy-Item .env.minimal.example .env.minimal }
 ```
 
-The online check performs a small private inference request (up to 64 output
-tokens), public RPC reads and authenticated quotes. It does not sign transactions
-or place orders. It intentionally excludes the wallet private key when loading
-`.env`. No command prints credentials or the private strategy. `--env PATH` selects
-an existing environment file without copying or modifying it.
+</details>
 
-## 🪪 Mint and activate
+### 2. Configure your mode
 
-AgenticID defaults to **0G mainnet, chain 16661**. Select its environment with
-`AGENTIC_ATTESTOR_URL` in `.env`:
+Open `.env.minimal` for simple mode or `.env` for advanced mode. Fill in `OWNER_PRIVATE_KEY` and a private-inference `AGENT_API_KEY`.
 
-| AgenticID network | `AGENTIC_ATTESTOR_URL` | Protocol funding |
+Set `AGENTIC_ATTESTOR_URL` to choose the identity network for either mode:
+
+| Network | Attestor URL | Chain ID |
 | --- | --- | --- |
-| Mainnet, 16661 (default) | `https://agenticid-mainnet.0g.ai` | Real native OG on 0G mainnet |
-| Testnet, 16602 | `https://agenticid.0g.ai` | Testnet OG from the [faucet](https://faucet.0g.ai/) |
+| Testnet | `https://agenticid.0g.ai` | `16602` |
+| Mainnet | `https://agenticid-mainnet.0g.ai` | `16661` |
 
-The SDK reads the chain, RPC and contract addresses from the selected attestor's
-`/config`; no separate 0G RPC setting is needed. Existing `.env` files with the
-testnet URL remain on testnet. Changing the URL does not migrate an existing INFT
-or its balances. Keep using its original endpoint to manage it. To deploy on the
-other network, select a separate environment file. Deployment records are now
-namespaced by profile, resolved protocol chain and registry, with diagnostics also
-scoped by agent ID. IDs belong to their chain/registry. Existing legacy records
-require the explicit, identity-verified local migration described in the runbook;
-the original `.local/deployment.json` remains unchanged.
+Advanced mode also needs `ONEINCH_API_KEY`, your allocations and strategy.
 
-For mainnet, fund the owner wallet with native OG on **0G mainnet (16661)** using
-a withdrawal or transfer that supports that exact network. Faucet OG cannot fund
-mainnet. Inference credit, sandbox credit, owner gas, and the agent's evolution
-gas are separate balances. `topup-sandbox` deposits owner OG as sandbox credit;
-`topup-agent` transfers owner OG to the agent for evolution gas.
+Keep these env files private.
 
-**Mainnet deployment and top-ups spend real OG even while investment trading is
-in simulation mode.** Offline `simulate` remains free of network requests and
-signatures. Selecting 0G testnet does not switch the investment networks to
-testnets; investment execution still requires `activate --live`. The CLI permits
-only the two 0G protocol chains above and rejects Ethereum mainnet.
+### 3. Preflight, fund and deploy
 
-```powershell
-npm run agent -- preflight
-# Only if needed; replace 0.1 with the exact OG amount you choose:
-npm run agent -- topup-sandbox --amount 0.1
-npm run agent -- deploy
-# Use the agent ID returned above:
-npm run agent -- topup-agent --agent 123 --amount 0.01
-npm run agent -- activate --agent 123
-npm run agent -- status --agent 123
-npm run agent -- watch --agent 123
+Read the [mainnet issue](#what-failed-on-mainnet) before deploying.
+
+Fund the owner wallet with native OG on the selected 0G network. Add inference credit separately.
+
+> 💸 Mainnet deployment and top-ups spend real OG, even in simulation.
+
+Run each command separately. Replace `ENV_FILE` with your chosen env file, `NEW_ID` with the ID returned by deployment, and `OG_AMOUNT` with your chosen deposit amount.
+
+```bash
+npm run agent -- preflight --env ENV_FILE
+# Only if sandbox credit is needed, using the preflight estimate:
+npm run agent -- topup-sandbox --env ENV_FILE --amount OG_AMOUNT
+npm run agent -- deploy --env ENV_FILE
+# Fund the new agent's native evolution/storage gas separately:
+npm run agent -- topup-agent --env ENV_FILE --agent NEW_ID --amount OG_AMOUNT
+npm run agent -- activate --env ENV_FILE --agent NEW_ID
+npm run agent -- status --env ENV_FILE --agent NEW_ID
 ```
 
-Preflight reports the available sandbox balance and an estimated minimum for
-creation plus 30 minutes. Deposits are never automatic. Deployment acknowledges the
-configured TEE trust components when needed and consumes existing prepaid sandbox
-credit. The deployment ID is saved **before** submission; repeat `deploy` after a
-lost response to resume that identity. Accepted, minted, running, and worker-ready
-are distinct states. For a failed minted deployment, use `retry --agent 123`.
+In simple mode, `activate` only checks runtime availability and proofs. In advanced mode, it starts the portfolio worker in simulation.
 
-Activation packages generic worker code, the dependency lock and private policy
-inside the encrypted persona. The owner chat launches a deterministic bootstrap
-from local `SOUL.md`, installs locked production dependencies, and starts the worker
-under `workspace/skills/portfolio/`. Strategy/state survive there through the sealed
-workspace lifecycle. No private strategy is included in the activation message.
-The 1inch key is sent separately through a one-use owner-signed configuration
-endpoint and stays in memory. Restarting requires configuration again.
-Configured attestor/RPC endpoints travel inside the encrypted capability. Dependency
-installation is marked complete only after `npm ci` succeeds for the matching lock.
+For simple-mode diagnostics:
 
-If activation reports `WORKER_NOT_READY` after the quote checks pass, check worker
-startup before adding funds. A running container does not imply a running worker.
-The sealed sign socket requires `POST /services` with a JSON object containing a
-`services` array, with each `input_example` encoded as a string (for example,
-`"{}"`). A bare array or an object-valued example returns HTTP 400 and prevents
-worker startup. The entries are checked against the SDK's service-entry type.
-The worker process log now retains allowlisted startup error codes and registration
-HTTP status, without exposing response bodies or credentials. Worker code is part
-of the encrypted capability: rebuilding locally alone does not update an already
-minted agent.
-An inference `HTTP 402` requires credit for `AGENT_API_KEY` in 0G Private Computer;
-investment wallet balances and `topup-agent` evolution gas do not fund inference.
-
-## 💸 Investment funding
-
-| Network | Cash token | Gas token |
-| --- | --- | --- |
-| Base, 8453 (default funding) | USDC | ETH on Base |
-| Arbitrum, 42161 (optional funding) | USDC | ETH on Arbitrum |
-| Robinhood, 4663 | USDG, 6 decimals | ETH on Robinhood |
-| BNB Chain, 56 | Binance-Peg USDT | BNB |
-
-Run `fund --agent 123` to print the sealed agent wallet and exact cash contracts.
-Send investment cash to that wallet on the selected funding network, and native
-gas on every network it will use. You can also fund USDG on Robinhood and USDT on
-BNB directly. An exchange withdrawal must support the **exact destination network**.
-For manual bridging, use a currently quoted non-Ethereum route in the
-[1inch app](https://app.1inch.io/); confirm both networks and token contracts before
-submitting. The worker uses only allowlisted direct chain pairs and has no
-Ethereum mainnet fallback. ETH used for L2 gas does not require an Ethereum-mainnet
-transaction.
-
-Positions are NVDA, MSFT, GOOGL, AMZN, AVGO and TAO on Robinhood, plus 0G and FET on
-BNB. VIRTUAL and RENDER are omitted. Investment **0G on BNB** is a separate
-network balance from native OG used for the INFT on the selected 0G network.
-Target weights are global across chains.
-
-After funding and reviewing the experiment:
-
-```powershell
-npm run agent -- activate --agent 123 --live
-npm run agent -- watch --agent 123
-npm run agent -- stop --agent 123
+```bash
+npm run agent -- diagnostics --env .env.minimal --agent NEW_ID
 ```
 
-Live activation checks market metadata, quotes and gas balances. The worker checks
-ownership before every signature, refuses stale/incomplete prices, and pauses stock
-trades outside verified issuer sessions or during halts. Approvals are bounded;
-unsupported router selectors are rejected. Some valid 1inch routes can therefore
-be skipped. Gas is required; execution is not promised to be gasless.
+If a state update fails, follow [containment and recovery](docs/minimal-persistence.md#containment-and-recovery) before continuing.
 
-Only one unresolved transaction or transfer is allowed. Signed bytes/order secrets
-are journaled before submission. A timeout never causes a new spend. Fusion secrets
-are disclosed only after checking paired escrows, recipients, amounts, confirmations
-and timelocks. Partial fills stay reserved. Expiry is not a refund. Permitted public
-escrow cancellation is simulated before signing; inaccessible recovery remains
-pending for the resolver. Stopping prevents further signatures but cannot undo an
-already submitted transaction or order. Keep monitoring unresolved orders.
-Live recovery may rebroadcast the identical saved transaction bytes, preserving its
-nonce and hash. Simulation leaves pending live execution reserved and performs no
-recovery writes. Re-enable explicit live mode to resume it. Long-outage escrow scans
-save their progress and continue in bounded pages.
+### 4. Run the advanced bot live (optional)
 
-## 🔁 Transfer, clone and reset
+Use your own deployed advanced agent ID in place of `NEW_ID`.
 
-INFT ownership is read on-chain. A transfer clears the old owner's in-memory API key
-and pauses trading until the new owner configures it. A cloned INFT has a new sealed
-wallet; inherited trading state is quarantined rather than replayed. Fund that new
-wallet separately. Use the [AgenticID SDK](https://github.com/0gfoundation/0g-agenticid-sdk)
-or its official owner tooling for transfer/clone authorization and creation.
-This project does not silently grant a buyer clone permission.
-
-For an existing INFT, a new owner needs only their owner key and API keys locally:
-`activate --agent ID` uses the policy already encrypted in the token. `reset --agent
-ID` reprovisions the same identity with the inference key, then activate again.
-Actual funded transfer/clone behavior is still a credential-dependent check; see
-[verification results](docs/verification.md).
-
-## 🧾 Logs and proofs
-
-The sealed worker writes redacted JSONL events under its persisted skill state.
-`status` and `watch` verify the sealed response signature against the on-chain agent,
-expiry, the complete current iData set, the expected submitter, and the hash of the exact HTTP transcript. Verified response
-bytes and proof metadata are saved under ignored profile/environment/agent evidence
-directories described in the runbook (older `.local/proofs/` files are preserved).
-The first signed runtime measurement must be approved by the on-chain framework
-registry; it is then pinned under `.local/proof-bindings/`. Later image changes fail
-verification until that pin is reviewed and deliberately removed. The protocol has
-no per-agent image getter: this first-use pin trusts the registry's approved set,
-and is not an independent audit of the image or a separately pinned build digest.
-
-```powershell
-npm run agent -- verify-proof --file .local/proofs/FILE.json --agent 123
+```bash
+npm run agent -- fund --env .env --agent NEW_ID
+# Send investment funds and gas to the printed wallet before continuing.
+npm run agent -- activate --env .env --agent NEW_ID --live
+npm run agent -- watch --env .env --agent NEW_ID
+# When ready to stop trading, exit watch with Ctrl+C, then:
+npm run agent -- stop --env .env --agent NEW_ID
 ```
 
-An expired or mismatched proof fails current verification. Mock tests and paper
-events are not real TEE proofs. Proofs establish attribution, not investment
-correctness or returns. Public trades expose holdings. Encryption at rest does not
-guarantee that a language model will never disclose its prompt. Private inference
-routing requires enclave model execution but alone is not proof of end-to-end
-transport privacy. Mainnet trades use real money; issuer restrictions and live
-liquidity can make a quoted strategy unavailable.
+`fund` prints the agent wallet and token contracts. Send USDC and ETH on **Base** (the default) from your wallet or exchange, using that exact network.
 
-## 🛠 Agent development tools
+Other trading chains need their own native gas: ETH on Robinhood, BNB on BNB Chain. See the [funding guide](docs/guide.md#-investment-funding).
 
-Agent tooling is managed with [Microsoft APM](https://microsoft.github.io/apm/).
-[Superpowers](https://github.com/obra/superpowers) v6.4.1 provides the project's
-15 development skills, including planning, testing, debugging, and code review.
-[Caveman](https://github.com/JuliusBrussee/caveman) v2.7.0 adds the core
-`caveman` skill for concise responses. Invoke it with `/caveman` or ask for
-"caveman mode"; use "normal mode" to stop.
-[Codebase Memory](https://deusdata.github.io/codebase-memory-mcp/) provides
-local code indexing and graph queries through MCP.
+**`stop` only stops the portfolio worker.** It does not stop the native runtime or its hosting costs.
 
-APM manages both skill dependencies and the Codebase Memory MCP configuration.
-It also exposes the RTK setup and verification commands through `apm run`.
-[RTK (Rust Token Killer)](https://github.com/rtk-ai/rtk) compresses shell output
-for coding agents. The tracked `AGENTS.md` and `RTK.md` instruct Codex users of
-this repository to use it, without a machine-specific instruction path.
-This is instruction-based integration, not an automatic command-rewriting hook
-or enforcement on human terminal commands.
+## 🧭 Portfolio deployment and activation
 
-The native Codebase Memory executable is a separate prerequisite, already
-installed on the setup machine (verified version: 0.10.8). APM's self-defined
-stdio entry configures this executable; it does not download or version-pin it.
+The advanced (`portfolio-manager`) path, from your local CLI to the worker inside the sealed TEE. The owner key stays on your computer; the 1inch key is sent separately during activation.
 
-## Setup (Windows)
+```mermaid
+sequenceDiagram
+    autonumber
+    box Your computer
+        participant CLI as Local CLI
+    end
+    box Outside the agent TEE
+        participant AG as 0G AgenticID services
+    end
+    box Agent sealed TEE
+        participant OC as OpenClaw
+        participant W as Portfolio worker
+    end
 
-Install APM using its official PowerShell installer:
+    Note over CLI,AG: DEPLOY - package the capability and create the agent
+    CLI->>CLI: Build capability from worker bundle,<br/>dependency lock and private policy
+    CLI->>AG: Preflight: network, funds and trust status
+    CLI->>CLI: Save deployment intent and idempotency key
+    CLI->>AG: Acknowledge trust components if needed
+    CLI->>AG: agent.deploy with encrypted iData,<br/>OpenClaw framework and inference credentials
+    AG-->>CLI: sealId and sealed wallet address
+    CLI->>AG: waitForMint(sealId)
+    AG-->>CLI: agentId
+    CLI->>CLI: Save agent ID in the deployment record
+    AG->>OC: Provision sealed runtime and workspace<br/>with the encrypted persona
+    CLI->>AG: waitForRunning(sealId)
+    AG-->>CLI: HTTPS runtime URL
+    Note over CLI,W: Runtime running does not mean portfolio worker ready
 
-```powershell
-irm https://aka.ms/apm-windows | iex
+    Note over CLI,W: ACTIVATE - bootstrap, verify and configure the worker
+    CLI->>AG: Resolve agent client, wallet and proof verifier
+    CLI->>W: Read /api/status through the sealed runtime
+    opt No verified worker status yet
+        CLI->>OC: Owner chat: run start.cjs or bootstrap from SOUL.md
+        OC->>OC: Verify and unpack into skills/portfolio/<br/>Install locked dependencies if needed
+        OC->>W: Launch worker.mjs with the agent ID
+        W->>W: Validate sealed identity and register services<br/>Wait for owner configuration
+        CLI->>W: Poll /api/status
+    end
+    W-->>CLI: Signed status response
+    CLI->>CLI: Verify proofs, agent ID and wallet<br/>Check package checksum when available
+    CLI->>W: Read /api/challenge
+    W-->>CLI: Signed one-use challenge
+    CLI->>CLI: Verify challenge and worker instance<br/>Sign configuration with the owner key
+    CLI->>W: POST /api/configure<br/>1inch key, mode, challenge and owner signature
+    W->>W: Authenticate current owner and configure<br/>Keep the API key in memory
+    W-->>CLI: Configuration accepted
+    CLI->>W: Read final /api/status
+    W-->>CLI: Signed ready status
+    CLI->>CLI: Verify final status and require ready
+    Note over W: Five-minute loop<br/>Simulation unless activated with --live
 ```
 
-Ensure `codebase-memory-mcp --version` succeeds. On a new Windows machine,
-install the runtime using the [upstream installation guide](https://deusdata.github.io/codebase-memory-mcp/):
+Follow the code: [deployment and activation](src/agent.ts) · [bootstrap](src/bootstrap.ts) · [sealed runtime](src/runtime.ts).
 
-```powershell
-irm https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.ps1 | iex
-```
+## 📖 More documentation
 
-Open a new terminal, then run from this repository:
+[Operator guide](docs/guide.md) · [Persistence runbook](docs/minimal-persistence.md) · [Verification](docs/verification.md) · [Tour hosting and DNS setup](docs/github-pages.md)
 
-```powershell
-./scripts/setup-agent.ps1
-apm audit --ci
-```
+## 📄 License
 
-Alternatively, when APM is on PATH, run `apm run setup`. The setup installs RTK
-with `winget install --id rtk-ai.rtk --exact --source winget` if it is missing,
-then verifies `rtk --version` and `rtk gain`. Windows App Installer supplies
-Winget. If Winget is unavailable, follow the
-[RTK installation guide](https://github.com/rtk-ai/rtk/blob/develop/INSTALL.md)
-and rerun setup. The prebuilt Windows package needs no Rust compiler or Python.
-RTK was verified here at 0.48.0; Winget selects its available release on a new
-machine. RTK is a native prerequisite, not a pinned APM skill dependency.
+[MIT](LICENSE) © 2026 Sandoche.
 
-After installation, restart the terminal and Codex desktop app so they inherit
-the updated PATH, then verify:
-
-```powershell
-apm run rtk-check
-apm run rtk-gain
-rtk git status
-```
-
-On macOS/Linux, install RTK using its upstream guide and run `apm install --frozen`
-after installing APM and Codebase Memory. The shared RTK instructions work across
-platforms; `apm run setup` is the Windows PowerShell setup entry point.
-Use `rtk proxy <command>` when a command needs unfiltered output or has no RTK
-filter. For PowerShell builtins, wrap the shell itself, for example
-`rtk proxy powershell -NoProfile -Command "Get-Location"`.
-
-The setup was verified with APM 0.31.0. Git for Windows (including Bash) is
-required for the upstream startup hook. Start a new Codex task/session after
-setup to load the project skills and startup hook.
-Trust this project in Codex so its project MCP configuration can load. Ask
-"Index this project" after cloning; the initial index has already been created
-on the setup machine. Graph data remains in the local Codebase Memory store.
-
-## Files and maintenance
-
-- `apm.yml` selects Codex, pins Superpowers and Caveman, and declares the MCP server.
-- `apm.lock.yaml` pins the exact upstream commit and content hashes.
-- `.agents/skills/` contains the installed skills and their supporting files.
-- `.codex/hooks.json` and `.codex/hooks/` contain the startup hook.
-- `.codex/config.toml` contains the APM-generated Codebase Memory MCP entry.
-- `AGENTS.md` and `RTK.md` contain the shared Codex RTK instructions.
-- `apm_modules/` is a generated dependency cache and is ignored by Git.
-
-Keep the manifest, lockfile, deployed skills, and hooks in version control.
-The setup script runs `apm install --frozen`, then copies the bootstrap skill
-into the location expected by the upstream hook. This compensates for APM
-0.31.0 deploying hooks and skills into separate directories. The bootstrap
-copy is also tracked so the hook works immediately after cloning.
-
-To upgrade Superpowers, choose a release and run
-`apm install obra/superpowers#<release-tag>`, then run the setup script and
-`apm audit --ci`. Review and commit the resulting changes together.
-
-On Windows, the setup script uses the Windows certificate store for Git
-when no process-level Git configuration has been supplied. It restores the
-environment afterward and does not change global Git settings.
-
-Superpowers is MIT licensed; see `THIRD-PARTY-LICENSES/Superpowers-LICENSE`.
-The installed Caveman skill is MIT licensed; see `THIRD-PARTY-LICENSES/Caveman-LICENSE`.
-This setup installs Caveman's core skill, not its separate proxy/runtime product.
+Bundled skills retain their [third-party licenses](THIRD-PARTY-LICENSES/).

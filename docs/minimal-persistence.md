@@ -6,6 +6,11 @@ of its gas-limit failures. Do not use that agent for this experiment.
 
 ## Configuration and network selection
 
+The [2026-09-21 testnet trial](minimal-testnet-result.md) minted agent 424 and
+verified successful initial and post-write workspace updates. The mainnet
+gas-limit failure did not recur in that run; specific file persistence and
+restoration remain unverified. The testnet runtime was stopped after the trial.
+
 Use Node 22 or newer. Preserve `.env`; create `.env.minimal` from
 `.env.minimal.example` only when that destination does not already exist. Supply:
 
@@ -105,7 +110,7 @@ The examples do not prescribe a funding amount. The runner never tops up
 automatically. A subsequent owner-authorized mainnet run created agent 3680055;
 funding enabled storage uploads but the registry update failed with
 `exceeds block gas limit`. Its runtime was stopped and the stopped phase confirmed.
-See the [dated live result in the README](../README.md#known-mainnet-bug-persistence-update-exceeds-block-gas-limit).
+See the [dated live result in the operator guide](guide.md#known-mainnet-bug-persistence-update-exceeds-block-gas-limit).
 
 ## Stages and evidence limits
 

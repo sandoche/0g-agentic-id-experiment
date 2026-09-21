@@ -18,6 +18,17 @@ test("parses weights exactly without requiring keys for simulation", () => {
 		config.strategy.targets.map((t: { weightBps: bigint }) => t.weightBps),
 	).toEqual([6000n, 4000n]);
 	expect(config.model).toBe("glm-5.3");
+	expect(config.strategy.intervalMs).toBe(300000);
+	expect(config.strategy.slippageBps).toBe(50n);
+});
+test("accepts an explicit one-minute cycle and ten-percent slippage", () => {
+	const config = readConfig({
+		...input,
+		REBALANCE_INTERVAL_MS: "60000",
+		MAX_SLIPPAGE_BPS: "1000",
+	});
+	expect(config.strategy.intervalMs).toBe(60000);
+	expect(config.strategy.slippageBps).toBe(1000n);
 });
 test.each([undefined, ""])(
 	"defaults an unset or empty attestor to mainnet without enabling live trading (%s)",
@@ -62,7 +73,9 @@ test.each([
 	{ STRATEGY_PROMPT: "" },
 	{ TRADING_MODE: "automatic" },
 	{ REBALANCE_INTERVAL_MS: "1" },
-	{ MAX_SLIPPAGE_BPS: "501" },
+	{ REBALANCE_INTERVAL_MS: "59999" },
+	{ REBALANCE_INTERVAL_MS: "300001" },
+	{ MAX_SLIPPAGE_BPS: "1001" },
 	{ MAX_SLIPPAGE_BPS: "0" },
 	{ MIN_TRADE_USD: "0" },
 	{ DRIFT_THRESHOLD_BPS: "-1" },
