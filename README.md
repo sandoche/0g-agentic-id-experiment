@@ -14,7 +14,7 @@
 
 > [!WARNING]
 > The bot code does not currently include a function to withdraw funds back to the
-> owner. **Do not use either mode with real funds.** Funds sent to the agent wallet
+> owner. **Do not use with real funds.** Funds sent to the agent wallet
 > may be unrecoverable through this bot. Use offline simulation or testnet funds
 > only.
 
