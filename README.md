@@ -1,6 +1,6 @@
 # 0g Agentic ID Experiment
 
-🤖 An experiment with on-chain agent identities and OpenClaw in a secure runtime: test whether an agent can save its state, or try a portfolio bot with an encrypted strategy and its own wallet.
+> 🤖 An experiment with 0g Agentic ID for minting a portfolio-manager agent as iNFT (running with openclaw on an TEE enclave).
 
 ## 🗯️ Bot Paperwork: wallets, chains, and agents
 
