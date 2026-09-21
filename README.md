@@ -2,6 +2,8 @@
 
 🤖 An experiment with 0G Agentic ID: mint a portfolio bot as an iNFT and run it with OpenClaw inside a TEE.
 
+👉 **[Take the interactive code tour](https://0g.san.cx/)** — portfolio manager and persistence probe, with highlighted code, keyboard navigation and autoplay. Source snapshot: `44c0216`.
+
 ## 🗯️ Bot Paperwork: wallets, chains, and agents
 
 <p align="center">
@@ -143,7 +145,7 @@ Other trading chains need their own native gas: ETH on Robinhood, BNB on BNB Cha
 
 ## 📖 More documentation
 
-[Operator guide](docs/guide.md) · [Persistence runbook](docs/minimal-persistence.md) · [Verification](docs/verification.md)
+[Operator guide](docs/guide.md) · [Persistence runbook](docs/minimal-persistence.md) · [Verification](docs/verification.md) · [Tour hosting and DNS setup](docs/github-pages.md)
 
 ## 📄 License
 
