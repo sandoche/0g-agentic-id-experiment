@@ -124,7 +124,7 @@ function transport(problem: Problem = "none"): typeof fetch {
 					.map((a) => ({
 						tokenSymbol: a.symbol,
 						tokenDecimals: 18,
-						status: "ACTIVE",
+						status: "ASSET_STATUS_ACTIVE",
 						currentMultiplier: "2",
 						deployments: [{ chainId: 4663, contractAddress: a.address }],
 						tradingCapabilities: Object.fromEntries(
@@ -210,6 +210,29 @@ test.each(["missing-price", "rpc-failure"] as const)(
 				transport(problem),
 			).snapshot("0x0000000000000000000000000000000000000001"),
 		).rejects.toThrow();
+	},
+);
+test("accepts Robinhood's active asset status with a fresh tradable quote", async () => {
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date("2026-09-21T15:00:00Z"));
+	const nvda = assets.find((a) => a.symbol === "NVDA")!;
+	expect(await createMarket(config, transport()).tradable(nvda)).toBe(true);
+});
+test.each(["ASSET_STATUS_INACTIVE", "ASSET_STATUS_UNSPECIFIED", "ACTIVE"])(
+	"rejects unrecognized or inactive stock status %s",
+	async (status) => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-09-21T15:00:00Z"));
+		const nvda = assets.find((a) => a.symbol === "NVDA")!;
+		const base = transport();
+		const market = createMarket(config, async (input, init) => {
+			const response = await base(input, init);
+			if (!String(input).endsWith("/rhj/assets")) return response;
+			const body = await response.json();
+			for (const asset of body.assets) asset.status = status;
+			return Response.json(body);
+		});
+		expect(await market.tradable(nvda)).toBe(false);
 	},
 );
 test("skips halted stocks", async () => {
