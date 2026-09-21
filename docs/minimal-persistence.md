@@ -6,6 +6,11 @@ of its gas-limit failures. Do not use that agent for this experiment.
 
 ## Configuration and network selection
 
+The [2026-09-21 testnet trial](minimal-testnet-result.md) minted agent 424 and
+verified successful initial and post-write workspace updates. The mainnet
+gas-limit failure did not recur in that run; specific file persistence and
+restoration remain unverified. The testnet runtime was stopped after the trial.
+
 Use Node 22 or newer. Preserve `.env`; create `.env.minimal` from
 `.env.minimal.example` only when that destination does not already exist. Supply:
 

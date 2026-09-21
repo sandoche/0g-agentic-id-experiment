@@ -68,12 +68,14 @@ npm run agent -- stop --env .env --agent NEW_ID
 
 ## 🧪 Two modes
 
-| Mode | Env file / `AGENT_PROFILE` | What it does | Deployed Agentic ID (trial, 0G mainnet) |
+| Mode | Env file / `AGENT_PROFILE` | What it does | Deployed Agentic ID (trial) |
 | --- | --- | --- | --- |
-| Simple | `.env.minimal` / `minimal` | Tests native agent creation and state persistence, without trading. | **3680055** — runtime stopped after the issue below |
-| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes; simulation by default. | **3670626** — portfolio experiment |
+| Simple | `.env.minimal` / `minimal` | Tests native agent creation and state persistence, without trading. | Testnet **424** — state updates verified; runtime stopped. Mainnet **3680055** — stopped after the issue below |
+| Advanced | `.env` / `portfolio-manager` (default) | Runs a portfolio bot every five minutes; simulation by default. | Mainnet **3670626** — portfolio experiment; advanced testnet trial pending |
 
 Both modes use `AGENTIC_ATTESTOR_URL` to select the identity network: `https://agenticid-mainnet.0g.ai` (mainnet, 16661) or `https://agenticid.0g.ai` (testnet, 16602).
+
+**✅ Simple mode works on 0G testnet for deployment and state updates.** On 2026-09-21, agent **424** completed initial sync and a workspace update after a test-file write request, with successful on-chain receipts and verified runtime proofs. The mainnet gas-limit error did not recur. The runtime was stopped after the trial. Specific file contents and restoration remain **unverified** because the native API cannot authenticate them; the file-persistence verdict is still `INCONCLUSIVE`. See the [testnet results](docs/minimal-testnet-result.md).
 
 > ⚠️ On 2026-09-21, the simple mainnet trial minted successfully but saving runtime state failed with `exceeds block gas limit`, before any test write; persistence remains unverified.
 > More gas funding does not fix this error: the watcher can keep retrying and spending, so stop the affected runtime and confirm it is stopped using the [recovery instructions](docs/minimal-persistence.md#containment-and-recovery).
