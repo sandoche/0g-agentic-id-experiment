@@ -50,6 +50,33 @@ it("accepts a constrained generic ERC20 swap", () => {
 		validateSwap(action, wallet, 4663, ROUTER, response(), 1000n, 50n).to,
 	).toBe(ROUTER);
 });
+it("accepts ten-percent slippage while enforcing the rounded minimum return", () => {
+	expect(
+		validateSwap(
+			action,
+			wallet,
+			4663,
+			ROUTER,
+			response({ minReturnAmount: 901n }),
+			1001n,
+			1000n,
+		).to,
+	).toBe(ROUTER);
+	expect(() =>
+		validateSwap(
+			action,
+			wallet,
+			4663,
+			ROUTER,
+			response({ minReturnAmount: 900n }),
+			1001n,
+			1000n,
+		),
+	).toThrow("UNSUPPORTED_CALLDATA");
+	expect(() =>
+		validateSwap(action, wallet, 4663, ROUTER, response(), 1001n, 1001n),
+	).toThrow("INVALID_SWAP");
+});
 it("can obtain preview calldata before approval while local signing still estimates execution", async () => {
 	const fetcher = vi.fn(async (url: URL | RequestInfo) => {
 		expect(new URL(String(url)).searchParams.get("disableEstimate")).toBe(
