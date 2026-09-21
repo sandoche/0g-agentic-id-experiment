@@ -236,7 +236,7 @@ export function createMarket(
 			if (!activeSession) return false;
 			const stock = checkStock(asset, await stockRegistry());
 			if (
-				stock.status !== "ACTIVE" ||
+				stock.status !== "ASSET_STATUS_ACTIVE" ||
 				stock.tradingCapabilities?.[activeSession]?.fractional !==
 					"TRADING_STATUS_TRADABLE"
 			)
